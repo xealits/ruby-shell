@@ -16,34 +16,51 @@ $cwd_history = [Dir.pwd]
 $cwd_max_length = 5
 $home_dir_aliases = ['~', '']
 
-def cwd dir
-  # special cases
-  if $home_dir_aliases.include? dir.strip
-    directory = Dir.home
-  elsif dir.strip == '-'
-    directory = $cwd_history[-1]
-  else
-    directory = dir
-  end
-
-  #
-  begin
-    prev_dir = Dir.pwd
-    Dir.chdir directory
-
+def update_cwd_history prev_dir
     # update cwd history
     # make place in history, if it's at max
     if $cwd_history.count >= $cwd_max_length
       $cwd_history.shift
     end
+
     # push new element, if it is new
     if prev_dir != $cwd_history[-1]
       $cwd_history.push prev_dir
     end
+end
+
+def cwd_chdir directory
+  #
+  begin
+    prev_dir = Dir.pwd
+    Dir.chdir directory
+    update_cwd_history prev_dir
 
   rescue Errno::ENOENT => error
     puts error.message
   end
+end
+
+def cwd dir
+  dir.strip!
+
+  # special cases
+  if $home_dir_aliases.include? dir
+    directory = Dir.home
+
+  # prev dir
+  elsif dir == '-'
+    directory = $cwd_history[-1]
+
+  # if directory does not exist, try to match it to one in history
+  elsif (!Dir.exists? dir)
+    match = $cwd_history.find {|e| e.include? dir}
+    directory = if match then match else dir end
+  else
+    directory = dir
+  end
+
+  cwd_chdir directory
 end
 
 def console (at_binding = nil)
@@ -65,13 +82,15 @@ def console (at_binding = nil)
       next
     end
 
-    # exec a system process
+    # the shell command
+    # eval the ruby code in the command, like: ls #{x+5}
     if at_binding
       usr_command = at_binding.eval('"' + usr_command + '"')
     else
       usr_command = eval('"' + usr_command + '"')
     end
 
+    # exec the system process
     begin
       stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
       $last_exit_code = wait_thr.value.exitstatus

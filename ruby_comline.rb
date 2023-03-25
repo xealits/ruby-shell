@@ -63,43 +63,50 @@ def cwd dir
   cwd_chdir directory
 end
 
+def eval_cmd usr_command, at_binding
+  puts ' ------ eval_cmd'
+
+  # special control cases
+  if usr_command.strip[...3] == 'irb'
+    at_binding.irb
+    return
+
+  elsif usr_command.strip[...2] == 'cd'
+    directory = usr_command.strip[2...].strip
+    cwd directory
+    return
+  end
+
+  # the shell command
+  # eval the ruby code in the command, like: ls #{x+5}
+  if at_binding
+    usr_command = at_binding.eval('"' + usr_command + '"')
+  else
+    usr_command = eval('"' + usr_command + '"')
+  end
+
+  # exec the system process
+  begin
+    stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+    $last_exit_code = wait_thr.value.exitstatus
+    puts "#{stdout.read} #{stderr.read}"
+    return $last_exit_code
+
+  rescue Errno::ENOENT => error
+    # command not found
+    #puts "command not found: #{usr_command}"
+    puts error.message
+  end
+end
+
 def console (at_binding = nil)
   while usr_command = Readline.readline(eval('"' + $prompt + '"'), true)
-
-    # special control cases
     if usr_command.strip.empty?
       next
     elsif usr_command.strip[...4] == 'exit'
       return usr_command.strip[4...].to_i
-
-    elsif usr_command.strip[...3] == 'irb'
-      at_binding.irb
-      next
-
-    elsif usr_command.strip[...2] == 'cd' # turn it into z?
-      directory = usr_command.strip[2...].strip
-      cwd directory
-      next
-    end
-
-    # the shell command
-    # eval the ruby code in the command, like: ls #{x+5}
-    if at_binding
-      usr_command = at_binding.eval('"' + usr_command + '"')
     else
-      usr_command = eval('"' + usr_command + '"')
-    end
-
-    # exec the system process
-    begin
-      stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
-      $last_exit_code = wait_thr.value.exitstatus
-      puts "#{stdout.read} #{stderr.read}"
-
-    rescue Errno::ENOENT => error
-      # command not found
-      #puts "command not found: #{usr_command}"
-      puts error.message
+      eval_cmd usr_command, at_binding
     end
   end
 end

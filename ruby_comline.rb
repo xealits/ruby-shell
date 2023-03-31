@@ -11,6 +11,7 @@ x = 5
 
 $prompt = '#{$last_exit_code.to_s.rjust 3} stdin> '
 $last_exit_code = 0
+$running_processes = []
 
 $cwd_history = [Dir.pwd]
 $cwd_max_length = 5
@@ -64,14 +65,14 @@ def cwd dir
 end
 
 def eval_cmd usr_command, at_binding
-  puts ' ------ eval_cmd'
+  usr_command.strip!
 
   # special control cases
-  if usr_command.strip[...3] == 'irb'
+  if usr_command[...3] == 'irb'
     at_binding.irb
     return
 
-  elsif usr_command.strip[...2] == 'cd'
+  elsif usr_command[...2] == 'cd'
     directory = usr_command.strip[2...].strip
     cwd directory
     return
@@ -88,9 +89,24 @@ def eval_cmd usr_command, at_binding
   # exec the system process
   begin
     stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
-    $last_exit_code = wait_thr.value.exitstatus
-    puts "#{stdout.read} #{stderr.read}"
-    return $last_exit_code
+    #$last_exit_code = wait_thr.value.exitstatus
+    #puts "#{stdout.read} #{stderr.read}"
+    #return $last_exit_code
+    # let's just save it as a running proc
+    $running_processes.append [stdin, stdout, stderr, wait_thr]
+    puts "launched a process #{wait_thr[:pid]}"
+    # does not really work:
+    # xterm, screen, etc launch something and do not matter themselves
+    # how to get the pid of the screen session, shell/fish that they opened?
+    # this works:
+    #   0 stdin> stdbuf -o0 sh
+    # launched a process 24148
+    #   0 stdin> xterm -fg grey -bg black -e ./ruby_read_fd.rb 24148
+    # launched a process 24151
+    #   0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/24148/fd/0'
+    # launched a process 24154
+
+    return
 
   rescue Errno::ENOENT => error
     # command not found
@@ -112,4 +128,5 @@ def console (at_binding = nil)
 end
 
 exit_code = console binding
+$running_processes.each {|p| exit_code = p[3].value.exitstatus}
 Kernel.exit exit_code

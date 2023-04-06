@@ -98,6 +98,38 @@ def read_fd fd
   end
 end
 
+def is_int? s
+  true if Integer(s) rescue false
+end
+
+# TODO turn it into an autonomous process signal handler
+# without the external kill command
+def shell_kill_cmd command
+  command.map! do |e|
+    if e[0] == '%' and is_int?(e[1..])
+      # substitute %i with PIDs if possible
+      i = Integer(e[1..])
+      if $running_processes[i]
+        $running_processes[i][3][:pid]
+      else
+        STDERR.puts "no job process is running at index #{i}"
+        return
+      end
+    else
+      # if it is not a %i -- just leave it as is
+      e
+    end
+  end
+
+  # rebuild the command string and launch the external kill command
+  usr_command = command.join ' '
+  puts usr_command
+  _, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+  $last_exit_code = wait_thr.value.exitstatus
+  puts "#{stdout.read} #{stderr.read}"
+  return $last_exit_code
+end
+
 def eval_cmd usr_command, at_binding
   usr_command.strip!
 
@@ -119,6 +151,9 @@ def eval_cmd usr_command, at_binding
       $running_processes.each_with_index {|p, i| puts "#{i}: #{p[3][:pid]} #{p[3]}"}
     end
     return
+
+  elsif command[0] == 'kill' # handle %1 sort of ID
+    return shell_kill_cmd command
   end
 
   # the shell command

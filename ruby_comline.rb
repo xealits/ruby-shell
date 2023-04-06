@@ -64,17 +64,34 @@ def cwd dir
   cwd_chdir directory
 end
 
+def clear_dead_jobs
+  $running_processes.reject! do |p|
+    isdead = !p[3].alive?
+    $last_exit_code = p[3].value.exitstatus if isdead
+    isdead # the return value of the block, that makes reject! reject
+  end
+end
+
 def eval_cmd usr_command, at_binding
   usr_command.strip!
 
   # special control cases
-  if usr_command[...3] == 'irb'
+  command = usr_command.split
+  if command[0] == 'irb'
     at_binding.irb
     return
 
-  elsif usr_command[...2] == 'cd'
+  elsif command[0] == 'cd'
     directory = usr_command.strip[2...].strip
     cwd directory
+    return
+
+  elsif command[0] == 'jobs'
+    if command[1] == 'clear'
+      clear_dead_jobs
+    else # print exiting processes/jobs
+      $running_processes.each_with_index {|p, i| puts "#{i}: #{p[3][:pid]} #{p[3]}"}
+    end
     return
   end
 
@@ -88,13 +105,24 @@ def eval_cmd usr_command, at_binding
 
   # exec the system process
   begin
+    spawn_process = false
+    usr_command, spawn_process = usr_command[...-1], true if usr_command.split[-1] == '&'
+
     stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
-    #$last_exit_code = wait_thr.value.exitstatus
-    #puts "#{stdout.read} #{stderr.read}"
-    #return $last_exit_code
-    # let's just save it as a running proc
-    $running_processes.append [stdin, stdout, stderr, wait_thr]
-    puts "launched a process #{wait_thr[:pid]}"
+
+    if spawn_process
+      # let's just save it as a running proc
+      $running_processes.append [stdin, stdout, stderr, wait_thr]
+      puts "launched a process #{wait_thr[:pid]}" # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
+      return
+
+    else
+      # wait on the command
+      $last_exit_code = wait_thr.value.exitstatus
+      puts "#{stdout.read} #{stderr.read}"
+      return $last_exit_code
+    end
+
     # does not really work:
     # xterm, screen, etc launch something and do not matter themselves
     # how to get the pid of the screen session, shell/fish that they opened?
@@ -106,8 +134,6 @@ def eval_cmd usr_command, at_binding
     #   0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/24148/fd/0'
     # launched a process 24154
 
-    return
-
   rescue Errno::ENOENT => error
     # command not found
     #puts "command not found: #{usr_command}"
@@ -116,10 +142,15 @@ def eval_cmd usr_command, at_binding
 end
 
 def console (at_binding = nil)
-  while usr_command = Readline.readline(eval('"' + $prompt + '"'), true)
+  while usr_command = Readline.readline(eval('"' + $prompt + '"'))
     if usr_command.strip.empty?
       next
-    elsif usr_command.strip[...4] == 'exit'
+    end
+
+    # if it is not empty -- add it to history
+    # or TODO: add it if it succeeded
+    Readline::HISTORY.push usr_command
+    if usr_command.strip[...4] == 'exit'
       return usr_command.strip[4...].to_i
     else
       eval_cmd usr_command, at_binding

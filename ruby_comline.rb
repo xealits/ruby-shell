@@ -17,6 +17,10 @@ $cwd_history = [Dir.pwd]
 $cwd_max_length = 5
 $home_dir_aliases = ['~', '']
 
+$global_binding  = binding
+$current_binding = $global_binding
+#puts "#{$global_binding} #{$current_binding}"
+
 def update_cwd_history prev_dir
     # update cwd history
     # make place in history, if it's at max
@@ -72,6 +76,28 @@ def clear_dead_jobs
   end
 end
 
+# make the shell continue if "terminal stop" SIGTSTP Ctrl-Z is sent (the current process should go to background and sleep)
+Signal.trap('TSTP') {
+  puts 'received TSTP, (if any) current proc went into background'
+  #console binding # this launches a new console, inside of the original that got stopped
+  # return from the stopped binding
+  #puts "#{$global_binding} #{$current_binding}"
+
+  if $current_binding != $global_binding
+    proc_binding = $current_binding
+    $current_binding = $global_binding
+    proc_binding.eval("return 0")
+  end
+
+}
+
+def read_fd fd
+  # so, it's like just a pipe
+  while s = fd.gets
+    puts s
+  end
+end
+
 def eval_cmd usr_command, at_binding
   usr_command.strip!
 
@@ -109,16 +135,20 @@ def eval_cmd usr_command, at_binding
     usr_command, spawn_process = usr_command[...-1], true if usr_command.split[-1] == '&'
 
     stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+    # let's save it as a running proc
+    $running_processes.append [stdin, stdout, stderr, wait_thr]
 
     if spawn_process
-      # let's just save it as a running proc
-      $running_processes.append [stdin, stdout, stderr, wait_thr]
       puts "launched a process #{wait_thr[:pid]}" # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
       return
 
     else
-      # wait on the command
+      # save this binding point and follow the command
+      $current_binding = binding
+      read_fd stdout
       $last_exit_code = wait_thr.value.exitstatus
+      $running_processes.pop
+      $current_binding = $global_binding # restore
       puts "#{stdout.read} #{stderr.read}"
       return $last_exit_code
     end
@@ -143,6 +173,7 @@ end
 
 def console (at_binding = nil)
   while usr_command = Readline.readline(eval('"' + $prompt + '"'))
+    #puts "#{$global_binding} #{$current_binding} | #{at_binding}"
     if usr_command.strip.empty?
       next
     end
@@ -158,6 +189,6 @@ def console (at_binding = nil)
   end
 end
 
-exit_code = console binding
+exit_code = console $global_binding
 $running_processes.each {|p| exit_code = p[3].value.exitstatus}
 Kernel.exit exit_code

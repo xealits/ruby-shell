@@ -1,1 +1,18 @@
 A simple shell program in Ruby: run external commands, spawn processes and manage them.
+
+```
+./ruby_comline.rb
+```
+
+It simply `eval`s the input string, to execute Ruby code in `#{...}` expressions.
+Then it spawns a process with the result as the command line.
+
+It is a toy project, just to try Ruby in shell programming, as it suits it well.
+The idea is to have a more normal language for shell, and try it out on process
+management tasks: spawn multiple processes, manipulate their file descriptors,
+connect `stdin` and `stdouts` as pipes, etc. It should be possible to spawn
+multiple `xterm` running the shell with the same `stdin`. It should be easy to
+browse their environment, pick up their logs in `stdout` and `stderr`, etc.
+It might be worth to try some process launch conditions, react to events in
+filesystem changes, have some FSM on the running processes.
+

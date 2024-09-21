@@ -147,6 +147,24 @@ def eval_cmd usr_command, at_binding
   elsif command[0] == 'jobs'
     if command[1] == 'clear'
       clear_dead_jobs
+
+    # if it acts on a process number
+    elsif command[1] and /(\D+)/.match(command[1]).nil?
+      proc_num = Integer(command[1])
+      if proc_num >= $running_processes.length
+        puts "there is no background process #{proc_num} see: jobs"
+        return
+      end
+
+      field = command[2]
+      if field == 'stdout'
+        puts "proc #{proc_num} stdout:"
+        puts $running_processes[proc_num][1].read
+      elsif field == 'stderr'
+        puts "proc #{proc_num} stdout:"
+        $running_processes[proc_num][2].read
+      end
+
     else # print exiting processes/jobs
       $running_processes.each_with_index {|p, i| puts "#{i}: #{p[3][:pid]} #{p[3]}"}
     end
@@ -163,6 +181,13 @@ def eval_cmd usr_command, at_binding
   else
     usr_command = eval('"' + usr_command + '"')
   end
+  # TODO: so, how good is this for actual Ruby code? How does it work now?
+  # There is the environment of Ruby interpreter, which spawns the system commands.
+  # The irb keyword gets you straight into the Ruby interpreter.
+  # You can run some Ruby code in #{} and get the outputs.
+  # How to get the data back: from the system commands to Ruby?
+  # The protocol interface, serialisation, should pop up somewhere there.
+  # System commands return some parseable data, Ruby easily picks it up.
 
   # exec the system process
   begin
@@ -174,7 +199,27 @@ def eval_cmd usr_command, at_binding
     $running_processes.append [stdin, stdout, stderr, wait_thr]
 
     if spawn_process
-      puts "launched a process #{wait_thr[:pid]}" # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
+      puts "launched a process #{wait_thr[:pid]}"
+      # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
+      # then it shows up as dead in jobs listing
+      # and I save its stdout and stdin, but there is no command to display them?
+      # the only command I have is jobs clear.
+      #
+      # Should there be a common way to connect to stdout of a running process
+      # and log it into some ringbuffer/pipe like data structure?
+      # I.e. the point is to just work with Linux and /proc instead of creating
+      # a new layer of jobs management system in the shell.
+      # Linux runs processes by their PIDs. What's needed are some domain names,
+      # like unit name in systemd, groups of processes, etc. Also resources:
+      # ports, sockets, files, locks.
+      #
+      # Then also, attach event handlers to that data structure?
+      # What Open3.popen3 returns? Are these some stream generators or already
+      # the whole text from the file descriptors?
+      # yeah, its an IO object:
+      #   0 stdin> jobs 0 stdout
+      #   proc 0 stdout:
+      #   #<IO:0x000077c296ed2508>
       return
 
     else

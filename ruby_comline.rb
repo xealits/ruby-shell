@@ -179,6 +179,7 @@ def eval_cmd usr_command, at_binding
 
   # the shell command
   # eval the ruby code in the command, like: ls #{x+5}
+  # TODO: the following eval breaks if the command line contains ""
   if at_binding
     usr_command = at_binding.eval('"' + usr_command + '"')
   else
@@ -199,23 +200,16 @@ def eval_cmd usr_command, at_binding
     spawn_process = false
     usr_command, spawn_process = usr_command[...-1], true if usr_command.split[-1] == '&'
 
-    stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
-
-    # popen3 loses the interactuve tty stuff
-    # tty-command to resque
-    #stdin, stdout, stderr = nil, nil, nil
-    #wait_thr = Thread.new { stdout, stderr = $tty_cmd.run(usr_command, pty: true, verbose: false) }
-    #wait_thr = Thread.new {}
-    #stdout, stderr = $tty_cmd.run(usr_command, pty: true, verbose: false)
-    # TODO: no stdin yet
-    #
-    # TODO: no, vim still complains in and out are not from terminal
-    # and the command still prints some log despite verbose: false
-
-    # let's save it as a running proc
-    $running_processes.append [stdin, stdout, stderr, wait_thr]
-
     if spawn_process
+
+      stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+      puts "stdin.tty? #{stdin.tty?}"
+      # TODO this won't work for vim
+      #      I guess I need a thread for spawned background processes
+
+      # let's save it as a running proc
+      $running_processes.append [stdin, stdout, stderr, wait_thr]
+
       puts "launched a process #{wait_thr[:pid]}"
       # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
       # then it shows up as dead in jobs listing
@@ -242,57 +236,17 @@ def eval_cmd usr_command, at_binding
     else
       # save this binding point and follow the command
       $current_binding = binding #TODO: why do I save the binding here? for Ctrl-C?
-      #read_fd stdout
-      # how does it work with interactive programs, like vim?
-      # not easliy
 
-      #
-      # let's try this (ChatGPT to help!):
-      # Redirect the process to use the current terminal's stdin, stdout, stderr
-      stdin_thread = Thread.new do
-        begin
-          IO.copy_stream(STDIN, stdin)
-        rescue Errno::EPIPE # when you call utilities like ls it fails
-          nil
-          # log no stdin?
-        ensure
-          stdin.close
-          # if it closes STDIN and crashes, try close_write:
-          #stdin.close_write
-        end
-      end
-=begin
-=end
+      # just use Process.spawn
+      pid = Process.spawn(usr_command, :in=>STDIN, :out=>STDOUT, :err=>STDERR)
+      Process.wait(pid)
+      $last_exit_code = $?.exitstatus
 
-      # better this:
-      #stdin.reopen(STDIN) # it does not work with cat
-      # no, vim still complains that input and output don't come from terminal
-      #puts "#{STDIN.tty?} ? : nil"
-
-      stdout_thread = Thread.new { IO.copy_stream(stdout, STDOUT) }
-      stderr_thread = Thread.new { IO.copy_stream(stderr, STDERR) }
-      #stdout.reopen(STDOUT)
-      #stderr.reopen(STDERR)
-      #STDOUT.reopen(stdout, 'w')
-      #STDERR.reopen(stderr, 'w')
-
-      # Wait for vim to exit
-      wait_thr.value
-      $last_exit_code = wait_thr.value.exitstatus
-      stdin_thread.join
-      stdout_thread.join
-      stderr_thread.join
-
-      $running_processes.pop
       $current_binding = $global_binding # restore
-      puts "#{stdout.read} #{stderr.read}" # this is not needed with tty command?
       return $last_exit_code
     end
 
-=begin
-    return $last_exit_code
-=end
-
+    # TODO: retry this:
     # does not really work:
     # xterm, screen, etc launch something and do not matter themselves
     # how to get the pid of the screen session, shell/fish that they opened?

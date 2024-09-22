@@ -225,8 +225,44 @@ def eval_cmd usr_command, at_binding
     else
       # save this binding point and follow the command
       $current_binding = binding
-      read_fd stdout
+      #read_fd stdout
+      # how does it work with interactive programs, like vim?
+      # not easliy
+
+      #
+      # let's try this (ChatGPT to help!):
+      # Redirect the process to use the current terminal's stdin, stdout, stderr
+      stdin_thread = Thread.new do
+        begin
+          IO.copy_stream(STDIN, stdin)
+        rescue Errno::EPIPE # when you call utilities like ls it fails
+          nil
+          # log no stdin?
+        ensure
+          stdin.close
+          # if it closes STDIN and crashes, try close_write:
+          #stdin.close_write
+        end
+      end
+      # better this:
+      #stdin.reopen(STDIN)
+      # no, vim still complains that input and output don't come from terminal
+      #puts "#{STDIN.tty?} ? : nil"
+
+      stdout_thread = Thread.new { IO.copy_stream(stdout, STDOUT) }
+      stderr_thread = Thread.new { IO.copy_stream(stderr, STDERR) }
+      #stdout.reopen(STDOUT)
+      #stderr.reopen(STDERR)
+      #STDOUT.reopen(stdout, 'w')
+      #STDERR.reopen(stderr, 'w')
+
+      # Wait for vim to exit
+      wait_thr.value
       $last_exit_code = wait_thr.value.exitstatus
+      stdin_thread.join
+      stdout_thread.join
+      stderr_thread.join
+
       $running_processes.pop
       $current_binding = $global_binding # restore
       puts "#{stdout.read} #{stderr.read}"

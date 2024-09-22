@@ -3,8 +3,11 @@
 # a shell
 
 require 'open3'
+#require 'tty-command'
 require 'irb'
 require 'readline'
+
+#$tty_cmd = TTY::Command.new
 
 $x = 55
 x = 5
@@ -191,10 +194,24 @@ def eval_cmd usr_command, at_binding
 
   # exec the system process
   begin
+    # this works for vim, but no control over streams:
+    #$last_exit_code = system(usr_command)
     spawn_process = false
     usr_command, spawn_process = usr_command[...-1], true if usr_command.split[-1] == '&'
 
     stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+
+    # popen3 loses the interactuve tty stuff
+    # tty-command to resque
+    #stdin, stdout, stderr = nil, nil, nil
+    #wait_thr = Thread.new { stdout, stderr = $tty_cmd.run(usr_command, pty: true, verbose: false) }
+    #wait_thr = Thread.new {}
+    #stdout, stderr = $tty_cmd.run(usr_command, pty: true, verbose: false)
+    # TODO: no stdin yet
+    #
+    # TODO: no, vim still complains in and out are not from terminal
+    # and the command still prints some log despite verbose: false
+
     # let's save it as a running proc
     $running_processes.append [stdin, stdout, stderr, wait_thr]
 
@@ -224,7 +241,7 @@ def eval_cmd usr_command, at_binding
 
     else
       # save this binding point and follow the command
-      $current_binding = binding
+      $current_binding = binding #TODO: why do I save the binding here? for Ctrl-C?
       #read_fd stdout
       # how does it work with interactive programs, like vim?
       # not easliy
@@ -244,8 +261,11 @@ def eval_cmd usr_command, at_binding
           #stdin.close_write
         end
       end
+=begin
+=end
+
       # better this:
-      #stdin.reopen(STDIN)
+      #stdin.reopen(STDIN) # it does not work with cat
       # no, vim still complains that input and output don't come from terminal
       #puts "#{STDIN.tty?} ? : nil"
 
@@ -265,9 +285,13 @@ def eval_cmd usr_command, at_binding
 
       $running_processes.pop
       $current_binding = $global_binding # restore
-      puts "#{stdout.read} #{stderr.read}"
+      puts "#{stdout.read} #{stderr.read}" # this is not needed with tty command?
       return $last_exit_code
     end
+
+=begin
+    return $last_exit_code
+=end
 
     # does not really work:
     # xterm, screen, etc launch something and do not matter themselves

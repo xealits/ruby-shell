@@ -16,3 +16,17 @@ browse their environment, pick up their logs in `stdout` and `stderr`, etc.
 It might be worth to try some process launch conditions, react to events in
 filesystem changes, have some FSM on the running processes.
 
+# Notes
+
+This works:
+
+```
+   0 stdin> stdbuf -o0 sh &
+ launched a process 24148
+   0 stdin> xterm -fg grey -bg black -e ./ruby_read_fd.rb #{proc_pid(0)} &
+ launched a process 24151
+   0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/#{proc_pid(0)}/fd/0' &
+ launched a process 24154
+```
+
+Somehow, `jobs kill 0` does not work on the sleeping process of that `sh`.

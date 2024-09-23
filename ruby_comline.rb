@@ -24,6 +24,14 @@ $global_binding  = binding
 $current_binding = $global_binding
 #puts "#{$global_binding} #{$current_binding}"
 
+def proc_pid proc_num
+  if proc_num > $running_processes.length
+    puts "proc_num > $running_processes.length"
+  end
+
+  return $running_processes[proc_num][3][:pid]
+end
+
 def update_cwd_history prev_dir
     # update cwd history
     # make place in history, if it's at max

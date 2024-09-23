@@ -80,11 +80,15 @@ def cwd dir
 end
 
 def clear_dead_jobs
+  n_jobs = $running_processes.length
+
   $running_processes.reject! do |p|
     isdead = !p[3].alive?
     $last_exit_code = p[3].value.exitstatus if isdead
     isdead # the return value of the block, that makes reject! reject
   end
+
+  puts "cleared #{n_jobs - $running_processes.length} dead jobs"
 end
 
 # make the shell continue if "terminal stop" SIGTSTP Ctrl-Z is sent (the current process should go to background and sleep)
@@ -116,9 +120,13 @@ end
 # TODO turn it into an autonomous process signal handler
 # without the external kill command
 def shell_kill_cmd command
+  # this is a mess:
+  # command is a list of user_command.split
+  # and shell_kill_cmd is called only if the first word in the command is kill
+
+  # substitute all occurances of %i job number with the PID if possible
   command.map! do |e|
     if e[0] == '%' and is_int?(e[1..])
-      # substitute %i with PIDs if possible
       i = Integer(e[1..])
       if $running_processes[i]
         $running_processes[i][3][:pid]
@@ -284,6 +292,15 @@ def console (at_binding = nil)
     # or TODO: add it if it succeeded
     Readline::HISTORY.push usr_command
     if usr_command.strip[...4] == 'exit'
+      # clear dead jobs and kill the running background processes
+      clear_dead_jobs
+
+      if $running_processes.length > 0
+        puts "killing #{$running_processes.length} active backgroun processes"
+        $running_processes.each {|_, _, _, wait_thr| `kill -KILL #{wait_thr[:pid]}`}
+        clear_dead_jobs
+      end
+
       return usr_command.strip[4...].to_i
     else
       eval_cmd usr_command, at_binding

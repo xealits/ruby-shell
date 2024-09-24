@@ -1,7 +1,7 @@
 A simple shell program in Ruby: run external commands, spawn processes and manage them.
 
 ```
-./ruby_comline.rb
+./comline.rb
 ```
 
 It simply `eval`s the input string, to execute Ruby code in `#{...}` expressions.
@@ -29,4 +29,8 @@ This works:
  launched a process 24154
 ```
 
-Somehow, `jobs kill 0` does not work on the sleeping process of that `sh`.
+To kill a background process, use its `%<number>` from the `jobs` list:
+`kill %0` etc.
+
+Somehow, `kill 0` kills the process and also terminates the shell.
+I.e. `popen3("kill 0")` terminates the Ruby interpreter?

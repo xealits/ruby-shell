@@ -27,6 +27,7 @@ This works:
  launched a process 24151
    0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/#{proc_pid(0)}/fd/0' &
  launched a process 24154
+  0 stdin> cat >> /proc/#{proc_pid(0)}/fd/0
 
   0 stdin> alias stdsh stdbuf -o0 sh
   0 stdin> stdsh &

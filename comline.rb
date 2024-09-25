@@ -208,11 +208,12 @@ def eval_cmd usr_command, at_binding
 
   # the shell command
   # eval the ruby code in the command, like: ls #{x+5}
-  # TODO: the following eval breaks if the command line contains ""
+  # TODO: what happens here if people use %{} in their command line string?
+  usr_command = '%{' + usr_command + '}'
   if at_binding
-    usr_command = at_binding.eval('"' + usr_command + '"')
+    usr_command = at_binding.eval(usr_command)
   else
-    usr_command = eval('"' + usr_command + '"')
+    usr_command = eval(usr_command)
   end
 
   # TODO: so, how good is this for actual Ruby code? How does it work now?

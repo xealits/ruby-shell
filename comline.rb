@@ -20,6 +20,8 @@ $cwd_history = [Dir.pwd]
 $cwd_max_length = 5
 $home_dir_aliases = ['~', '']
 
+$aliases = {}
+
 $global_binding  = binding
 $current_binding = $global_binding
 #puts "#{$global_binding} #{$current_binding}"
@@ -163,6 +165,12 @@ def eval_cmd usr_command, at_binding
     cwd directory
     return
 
+  elsif command[0] == 'alias'
+    alias_name = command[1]
+    alias_val  = command[2..].join ' '
+    $aliases[alias_name] = alias_val
+    return
+
   elsif command[0] == 'jobs'
     if command[1] == 'clear'
       clear_dead_jobs
@@ -185,7 +193,12 @@ def eval_cmd usr_command, at_binding
       end
 
     else # print exiting processes/jobs
-      $running_processes.each_with_index {|p, i| puts "#{i}: #{p[3][:pid]} #{p[3]}"}
+      $running_processes.each_with_index do |p, i|
+        pid = p[3][:pid]
+        #cmd = `cat /proc/#{pid}/comm`
+        cmd = p[4]
+        puts "#{i}: #{pid} #{cmd} #{p[3]}"
+      end
     end
     return
 
@@ -201,6 +214,7 @@ def eval_cmd usr_command, at_binding
   else
     usr_command = eval('"' + usr_command + '"')
   end
+
   # TODO: so, how good is this for actual Ruby code? How does it work now?
   # There is the environment of Ruby interpreter, which spawns the system commands.
   # The irb keyword gets you straight into the Ruby interpreter.
@@ -208,6 +222,9 @@ def eval_cmd usr_command, at_binding
   # How to get the data back: from the system commands to Ruby?
   # The protocol interface, serialisation, should pop up somewhere there.
   # System commands return some parseable data, Ruby easily picks it up.
+
+  # substitute aliases
+  $aliases.each {|k, v| usr_command.sub! k, v}
 
   # exec the system process
   begin
@@ -224,7 +241,7 @@ def eval_cmd usr_command, at_binding
       #      I guess I need a thread for spawned background processes
 
       # let's save it as a running proc
-      $running_processes.append [stdin, stdout, stderr, wait_thr]
+      $running_processes.append [stdin, stdout, stderr, wait_thr, usr_command]
 
       puts "launched a process #{wait_thr[:pid]}"
       # TODO: what if the process quickly exits, like stdbuf -o0 sh ?

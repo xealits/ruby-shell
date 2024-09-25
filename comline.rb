@@ -315,7 +315,10 @@ def console (at_binding = nil)
 
       if $running_processes.length > 0
         puts "killing #{$running_processes.length} active backgroun processes"
-        $running_processes.each {|_, _, _, wait_thr| `kill -KILL #{wait_thr[:pid]}`}
+        $running_processes.each do |_, _, _, wait_thr|
+          `kill -KILL #{wait_thr[:pid]}`
+          $last_exit_code = wait_thr.value.exitstatus
+        end
         clear_dead_jobs
       end
 

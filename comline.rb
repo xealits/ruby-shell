@@ -9,7 +9,7 @@ require 'readline'
 
 require 'logger'
 
-logger = Logger.new($stdout) # create a new logger that writes to the console
+$logger = Logger.new($stdout) # create a new logger that writes to the console
 
 #$tty_cmd = TTY::Command.new
 
@@ -31,7 +31,7 @@ $current_binding = $global_binding
 #puts "#{$global_binding} #{$current_binding}"
 
 def proc_pid proc_num
-  logger.debug("proc_pid from jobs #{proc_num}")
+  $logger.debug("proc_pid from jobs #{proc_num}")
 
   if proc_num > $running_processes.length
     puts "proc_num > $running_processes.length"
@@ -41,7 +41,7 @@ def proc_pid proc_num
 end
 
 def update_cwd_history prev_dir
-  logger.debug("update_cwd_history with #{prev_dir}")
+  $logger.debug("update_cwd_history with #{prev_dir}")
 
   # update cwd history
   # make place in history, if it's at max
@@ -56,7 +56,7 @@ def update_cwd_history prev_dir
 end
 
 def cwd_chdir directory
-  logger.debug("cwd_chdir #{directory}")
+  $logger.debug("cwd_chdir #{directory}")
 
   #
   begin
@@ -70,7 +70,7 @@ def cwd_chdir directory
 end
 
 def cwd dir
-  logger.debug("cwd #{dir}")
+  $logger.debug("cwd #{dir}")
 
   dir.strip!
 
@@ -94,7 +94,7 @@ def cwd dir
 end
 
 def clear_dead_jobs
-  logger.debug("clear_dead_jobs")
+  $logger.debug("clear_dead_jobs")
 
   n_jobs = $running_processes.length
 
@@ -109,7 +109,7 @@ end
 
 # make the shell continue if "terminal stop" SIGTSTP Ctrl-Z is sent (the current process should go to background and sleep)
 Signal.trap('TSTP') {
-  logger.debug('received TSTP, (if any) current proc went into background')
+  $logger.debug('received TSTP, (if any) current proc went into background')
 
   #console binding # this launches a new console, inside of the original that got stopped
   # return from the stopped binding
@@ -137,7 +137,7 @@ end
 # TODO turn it into an autonomous process signal handler
 # without the external kill command
 def shell_kill_cmd command
-  logger.debug("shell_kill_cmd #{command}")
+  $logger.debug("shell_kill_cmd #{command}")
 
   # this is a mess:
   # command is a list of user_command.split
@@ -169,7 +169,7 @@ def shell_kill_cmd command
 end
 
 def eval_cmd usr_command, at_binding
-  logger.debug("usr_command #{usr_command}")
+  $logger.debug("usr_command #{usr_command}")
 
   usr_command.strip!
 
@@ -343,7 +343,7 @@ def eval_cmd usr_command, at_binding
 end
 
 def console (at_binding = nil)
-  logger.debug("launch a console")
+  $logger.debug("launch a console")
 
   while usr_command = Readline.readline(eval('"' + $prompt + '"'))
     #puts "#{$global_binding} #{$current_binding} | #{at_binding}"
@@ -355,7 +355,7 @@ def console (at_binding = nil)
     # or TODO: add it if it succeeded
     Readline::HISTORY.push usr_command
     if usr_command.strip[...4] == 'exit'
-      logger.debug("exit command")
+      $logger.debug("exit command")
       # clear dead jobs and kill the running background processes
       clear_dead_jobs
 
@@ -381,10 +381,12 @@ end
 require 'optparse'
 parser = OptionParser.new
 
-logger.level = Logger::WARN
+$logger.level = Logger::WARN
 parser.on('-d', '--debug', 'DEBUG logging level') do |value|
-  logger.level = Logger::DEBUG
+  $logger.level = Logger::DEBUG
 end
+
+parser.parse!
 
 # TODO: make a proper command line utility here and then turn everything into a gem
 exit_code = console $global_binding

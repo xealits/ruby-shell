@@ -187,9 +187,23 @@ def eval_cmd usr_command, at_binding
       if field == 'stdout'
         puts "proc #{proc_num} stdout:"
         puts $running_processes[proc_num][1].read
+
       elsif field == 'stderr'
         puts "proc #{proc_num} stdout:"
         $running_processes[proc_num][2].read
+
+      elsif field == 'connect'
+        # TODO: not sure if the following works
+        #       it does not work with vim or nvim
+        wait_thr = $running_processes[proc_num][3]
+        pid = wait_thr[:pid]
+        puts "connecting STDIN and STDOUT to proc #{proc_num} PID=#{pid}..."
+        process_stdin = File.open("/proc/#{pid}/fd/0", "r+")
+        process_stdout = File.open("/proc/#{pid}/fd/1", "w+")
+        STDIN.reopen(process_stdin)
+        STDOUT.reopen(process_stdout)
+        #puts "connected STDIN and STDOUT to proc #{proc_num} PID=#{pid}..."
+        $last_exit_code = wait_thr.value.exitstatus
       end
 
     else # print exiting processes/jobs
@@ -221,6 +235,10 @@ def eval_cmd usr_command, at_binding
   # The irb keyword gets you straight into the Ruby interpreter.
   # You can run some Ruby code in #{} and get the outputs.
   # How to get the data back: from the system commands to Ruby?
+  # Currently, you enter irb, it gets you into Ruby interpreter,
+  # and you can call any system command from there.
+  # To have a mixed language, you'd probably add something like #{x + `echo bar`}.
+  #
   # The protocol interface, serialisation, should pop up somewhere there.
   # System commands return some parseable data, Ruby easily picks it up.
 
@@ -239,7 +257,13 @@ def eval_cmd usr_command, at_binding
       stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
       puts "stdin.tty? #{stdin.tty?}"
       # TODO this won't work for vim
-      #      I guess I need a thread for spawned background processes
+      #      I guess I need a thread for spawned background processes.
+      #      The point is that Vim connects to stdin, stdout and goes to sleep
+      #      in the background. Then, you wake it up to send to foreground.
+      #      In my case, I kind of want to really connect-disconnect file descriptors.
+      #      I.e. the should be a command to connect current STDIN and STDOUT to the background running process.
+      #      Like in the example with xterm.
+      #      Then you need some signal to disconnect from the process file descriptors.
 
       # let's save it as a running proc
       $running_processes.append [stdin, stdout, stderr, wait_thr, usr_command]
@@ -329,6 +353,7 @@ def console (at_binding = nil)
   end
 end
 
+# TODO: make a proper command line utility here and then turn everything into a gem
 exit_code = console $global_binding
 $running_processes.each {|p| exit_code = p[3].value.exitstatus}
 Kernel.exit exit_code

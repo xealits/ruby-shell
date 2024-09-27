@@ -53,6 +53,8 @@ def update_cmd_history new_command
   if new_command != $command_history[-1]
     $command_history.push new_command
   end
+
+  $logger.debug("update_cmd_history done: #{$command_history}")
 end
 
 def update_cwd_history prev_dir
@@ -410,6 +412,60 @@ parser.parse!
 
 # TODO: whenever the script throws, it messes up readline for the shell too
 #       it kind of works, but needs testing - it messed up one ls and substituted it with s
+
+def match_history comline, completion_word
+  $logger.debug("\nmatch_history: #{comline} and #{completion_word}")
+  completion_list = []
+
+  # try history completion first
+  completion_list = $command_history.grep /^#{Regexp.escape(comline)}/ 
+
+  #if completion_list.length == 1
+  #  # if completion returns 1 thing, it adds it to the readline buffer
+  #  # so, it cannot be the whole history line
+  #  #completion_list[0].sub! comline, ''
+  #  # this does not work right either
+  #  # let's try this:
+  #  completion_list = completion_list[0]
+  #end
+  # no
+  # if it is completing the word, then it has to return 
+  if completion_list.length > 0 # and completion_word.strip.empty?
+    $logger.debug("\nmatch_history: matched commands, strip prefix: #{completion_list}")
+    # OK, this should work:
+    completion_list = completion_list.map do |cmd_record|
+      # the prefix is everything in the completion comline until the current completion word
+      #
+      # completion is supposed to return a list of substitutions
+      # for _the current completion word_
+      #
+      cmd_record[(comline.length - completion_word.length)..]
+    end
+    $logger.debug("\nmatch_history: striped prefix: #{completion_list}")
+  end
+
+  $logger.debug("\nmatch_history: return #{completion_list}")
+  completion_list
+end
+
+def match_local_files cur_word
+  $logger.debug("\nmatch_local_files: not a history match")
+
+  completion_list = []
+
+  local_files = `ls`.split
+  if cur_word == ' '
+    completion_list = local_files
+  else
+    completion_list = local_files.grep /^#{cur_word}/
+    #puts "completion: #{last_word} in #{local_files} -> #{completion_list}"
+  end
+
+  completion_list
+end
+
+$completion_precedence_history = true
+$last_completion_line = ''
 Readline.completion_proc = proc do |cur_word|
   cur_line = Readline.line_buffer
   $logger.debug("\ncompletion: #{cur_line} and #{cur_word}")
@@ -417,25 +473,23 @@ Readline.completion_proc = proc do |cur_word|
   completion_list = []
 
   # try history completion first
-  completion_list = $command_history.grep /^#{Regexp.escape(cur_line)}/ 
+  if $completion_precedence_history
+    completion_list = match_history cur_line, cur_word
+    if completion_list.length == 0
+      completion_list = match_local_files cur_word
+    end
 
-  if completion_list.length == 1
-    # if completion returns 1 thing, it adds it to the readline buffer
-    # so, it cannot be the whole history line
-    completion_list[0].sub! cur_line, ''
-
-  # if no match, do the default file completion
-  elsif completion_list.length == 0
-    $logger.debug("\ncompletion: not a history match")
-
-    local_files = `ls`.split
-    if cur_word == ' '
-      completion_list = local_files
-    else
-      completion_list = local_files.grep /^#{cur_word}/
-      #puts "completion: #{last_word} in #{local_files} -> #{completion_list}"
+  else
+    completion_list = match_local_files cur_word
+    if completion_list.length == 0
+      completion_list = match_history cur_line
     end
   end
+
+  ## swap the precedence if needed
+  #if $last_completion_line == $cur_line
+  #  $completion_precedence_history = !$completion_precedence_history
+  #end
 
   completion_list
 end

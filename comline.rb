@@ -20,6 +20,8 @@ $prompt = '#{$last_exit_code.to_s.rjust 3} stdin> '
 $last_exit_code = 0
 $running_processes = []
 
+$command_history = []
+$command_history_max = 50 # TODO: they might have a data structure for this in Ruby - or just make a class
 $cwd_history = [Dir.pwd]
 $cwd_max_length = 5
 $home_dir_aliases = ['~', '']
@@ -38,6 +40,19 @@ def proc_pid proc_num
   end
 
   return $running_processes[proc_num][3][:pid]
+end
+
+def update_cmd_history new_command
+  $logger.debug("update_cmd_history with #{new_command}")
+
+  if $command_history.count >= $command_history_max
+    command_history.shift
+  end
+
+  # push new element, if it is new
+  if new_command != $command_history[-1]
+    $command_history.push new_command
+  end
 end
 
 def update_cwd_history prev_dir
@@ -172,6 +187,7 @@ def eval_cmd usr_command, at_binding
   $logger.debug("usr_command #{usr_command}")
 
   usr_command.strip!
+  update_cmd_history usr_command
 
   # special control cases
   command = usr_command.split
@@ -387,6 +403,42 @@ parser.on('-d', '--debug', 'DEBUG logging level') do |value|
 end
 
 parser.parse!
+
+#
+# an attempt at readline completion for history
+# from https://stackoverflow.com/questions/10791060/how-can-i-do-readline-arguments-completion
+
+# TODO: whenever the script throws, it messes up readline for the shell too
+#       it kind of works, but needs testing - it messed up one ls and substituted it with s
+Readline.completion_proc = proc do |cur_word|
+  cur_line = Readline.line_buffer
+  $logger.debug("\ncompletion: #{cur_line} and #{cur_word}")
+
+  completion_list = []
+
+  # try history completion first
+  completion_list = $command_history.grep /^#{Regexp.escape(cur_line)}/ 
+
+  if completion_list.length == 1
+    # if completion returns 1 thing, it adds it to the readline buffer
+    # so, it cannot be the whole history line
+    completion_list[0].sub! cur_line, ''
+
+  # if no match, do the default file completion
+  elsif completion_list.length == 0
+    $logger.debug("\ncompletion: not a history match")
+
+    local_files = `ls`.split
+    if cur_word == ' '
+      completion_list = local_files
+    else
+      completion_list = local_files.grep /^#{cur_word}/
+      #puts "completion: #{last_word} in #{local_files} -> #{completion_list}"
+    end
+  end
+
+  completion_list
+end
 
 # TODO: make a proper command line utility here and then turn everything into a gem
 exit_code = console $global_binding

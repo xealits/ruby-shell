@@ -22,7 +22,7 @@ $running_processes = []
 
 $command_history = []
 $command_history_max = 50 # TODO: they might have a data structure for this in Ruby - or just make a class
-$cwd_history = [Dir.pwd]
+$cwd_history = [Dir.pwd + '/']
 $cwd_max_length = 5
 $home_dir_aliases = ['~', '']
 
@@ -77,11 +77,15 @@ def cwd_chdir directory
 
   #
   begin
-    prev_dir = Dir.pwd
-    Dir.chdir directory
-    update_cwd_history prev_dir
+    cur_pwd = Dir.pwd
+    abs_new_pwd = File.expand_path(directory) + '/'
+    # TODO: adding / is britle: what is the user asks for dir/// ?
+    #       and it won't match with history dir/
+    #       I need a common minimal way: collapse /// into one / is probably the best
+    Dir.chdir abs_new_pwd
+    update_cwd_history abs_new_pwd
 
-  rescue Errno::ENOENT => error
+  rescue Errno::ENOENT, Errno::ENOTDIR => error
     puts error.message
   end
 end
@@ -100,9 +104,14 @@ def cwd dir
     directory = $cwd_history[-1]
 
   # if directory does not exist, try to match it to one in history
-  elsif (!Dir.exists? dir)
-    match = $cwd_history.find {|e| e.include? dir}
+  elsif (!Dir.exist? dir)
+    # among all the matches, pick the smallest one
+    #match = $cwd_history.find {|e| e.include? dir}
+    matches = $cwd_history.filter {|e| e.include? dir}
+    match   = matches.sort_by {|s| s.length} [0]
     directory = if match then match else dir end
+    $logger.debug "tried a directory from histry: #{dir} #{match} : #{matches} : #{$cwd_history}"
+
   else
     directory = dir
   end

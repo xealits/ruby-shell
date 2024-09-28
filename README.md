@@ -41,6 +41,12 @@ This works:
   0 stdin> stdsh &
 ```
 
+Also:
+
+```
+alias ls ls --color=auto
+```
+
 To kill a background process, use its `%<number>` from the `jobs` list:
 `kill %0` etc.
 

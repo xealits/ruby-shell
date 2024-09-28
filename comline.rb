@@ -395,17 +395,6 @@ def console (at_binding = nil)
 end
 
 
-# comline executable
-require 'optparse'
-parser = OptionParser.new
-
-$logger.level = Logger::WARN
-parser.on('-d', '--debug', 'DEBUG logging level') do |value|
-  $logger.level = Logger::DEBUG
-end
-
-parser.parse!
-
 #
 # an attempt at readline completion for history
 # from https://stackoverflow.com/questions/10791060/how-can-i-do-readline-arguments-completion
@@ -464,35 +453,53 @@ def match_local_files cur_word
   completion_list
 end
 
-$completion_precedence_history = true
 $last_completion_line = ''
+$check_history = true
 Readline.completion_proc = proc do |cur_word|
   cur_line = Readline.line_buffer
-  $logger.debug("\ncompletion: #{cur_line} and #{cur_word}")
+  $logger.debug("\ncompletion: #{cur_line} and #{cur_word} and #{$check_history}")
 
   completion_list = []
 
-  # try history completion first
-  if $completion_precedence_history
-    completion_list = match_history cur_line, cur_word
-    if completion_list.length == 0
-      completion_list = match_local_files cur_word
-    end
-
+  # if already tried o complete this line
+  # maybe the user gets a history prompt and does not want it
+  # skip history and go for files
+  if $last_completion_line == cur_line
+    $check_history = !$check_history
   else
-    completion_list = match_local_files cur_word
-    if completion_list.length == 0
-      completion_list = match_history cur_line
-    end
+    $last_completion_line = cur_line
+    $check_history = true
   end
 
-  ## swap the precedence if needed
-  #if $last_completion_line == $cur_line
-  #  $completion_precedence_history = !$completion_precedence_history
-  #end
+  # try history completion first
+  if $check_history
+    completion_list = match_history cur_line, cur_word
+    #if completion_list.length == 0
+    #  completion_list = match_local_files cur_word
+    #end
+  end
+
+  if completion_list.length == 0
+    completion_list = match_local_files cur_word
+    #if completion_list.length == 0
+    #  completion_list = match_history cur_line
+    #end
+  end
 
   completion_list
 end
+
+
+# comline executable
+require 'optparse'
+parser = OptionParser.new
+
+$logger.level = Logger::WARN
+parser.on('-d', '--debug', 'DEBUG logging level') do |value|
+  $logger.level = Logger::DEBUG
+end
+
+parser.parse!
 
 # TODO: make a proper command line utility here and then turn everything into a gem
 exit_code = console $global_binding

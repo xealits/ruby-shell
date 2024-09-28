@@ -1,7 +1,15 @@
 A simple shell program in Ruby: run external commands, spawn processes and manage them.
 
 ```
-./comline.rb
+ruby -Ilib bin/comline
+```
+
+Or build and install the gem (it is not on rubygems.org yet):
+
+```
+gem build ruby_shell.gemspec
+gem install --user-install ./ruby_shell-0.1.0.gem 
+gem uninstall ruby_shell
 ```
 
 It simply `eval`s the input string, to execute Ruby code in `#{...}` expressions.

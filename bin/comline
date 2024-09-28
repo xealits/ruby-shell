@@ -1,0 +1,20 @@
+#!/usr/bin/ruby
+##
+# a shell
+require 'ruby_shell'
+
+# comline executable
+require 'optparse'
+parser = OptionParser.new
+
+$logger.level = Logger::WARN
+parser.on('-d', '--debug', 'DEBUG logging level') do |value|
+  $logger.level = Logger::DEBUG
+end
+
+parser.parse!
+
+# TODO: make a proper command line utility here and then turn everything into a gem
+exit_code = console $global_binding
+$running_processes.each {|p| exit_code = p[3].value.exitstatus}
+Kernel.exit exit_code

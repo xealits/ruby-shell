@@ -442,11 +442,22 @@ def match_local_files cur_word
 
   completion_list = []
 
-  local_files = `ls`.split
+  #local_files = `ls #{cur_word}*`.split
+  completion_list = [] # local_files
   if cur_word == ' '
-    completion_list = local_files
+    completion_list = `ls`.split
+    #completion_list = local_files
   else
-    completion_list = local_files.grep /^#{cur_word}/
+    #local_files = `ls -d #{cur_word}*`.split
+    stdin, stdout, stderr, wait_thr = Open3.popen3("ls -d #{cur_word}*")
+    _ = wait_thr.value.exitstatus
+    local_files = stdout.read.split
+    #completion_list = local_files.grep /^#{cur_word}/
+    # if it returns only 1 match and it is a directory - list directory contents
+    if local_files.length == 1 and File.directory? local_files[0]
+      local_files = `ls -d #{local_files[0]}/*`.split
+    end
+    completion_list = local_files
     #puts "completion: #{last_word} in #{local_files} -> #{completion_list}"
   end
 
@@ -490,18 +501,18 @@ Readline.completion_proc = proc do |cur_word|
 end
 
 
-# comline executable
-require 'optparse'
-parser = OptionParser.new
-
-$logger.level = Logger::WARN
-parser.on('-d', '--debug', 'DEBUG logging level') do |value|
-  $logger.level = Logger::DEBUG
-end
-
-parser.parse!
-
-# TODO: make a proper command line utility here and then turn everything into a gem
-exit_code = console $global_binding
-$running_processes.each {|p| exit_code = p[3].value.exitstatus}
-Kernel.exit exit_code
+## comline executable
+#require 'optparse'
+#parser = OptionParser.new
+#
+#$logger.level = Logger::WARN
+#parser.on('-d', '--debug', 'DEBUG logging level') do |value|
+#  $logger.level = Logger::DEBUG
+#end
+#
+#parser.parse!
+#
+## TODO: make a proper command line utility here and then turn everything into a gem
+#exit_code = console $global_binding
+#$running_processes.each {|p| exit_code = p[3].value.exitstatus}
+#Kernel.exit exit_code

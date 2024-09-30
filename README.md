@@ -88,6 +88,30 @@ This works:
   0 stdin> stdsh &
 ```
 
+```
+  0 stdin> cat > temp_foo &
+stdin.tty? false
+launched a process 9902
+  0 stdin>
+  0 stdin> echo "hello" > #{proc_stdin proc_pid 0}
+  0 stdin> echo "world" > #{proc_stdin proc_pid 0}
+  0 stdin> echo "this is Ruby shell" > #{proc_stdin proc_pid 0}
+  0 stdin> cat temp_foo
+hello
+world
+this is Ruby shell
+  0 stdin> jobs
+0: 9902 cat > temp_foo  #<Process::Waiter:0x000070d9beeb69b0 sleep>
+  0 stdin> kill %0
+kill 9902
+  0 stdin> jobs
+0: 9902 cat > temp_foo  #<Process::Waiter:0x000070d9beeb69b0 dead>
+  0 stdin> jobs clear
+cleared 1 dead jobs
+    stdin> jobs
+    stdin> exit
+```
+
 Also:
 
 ```

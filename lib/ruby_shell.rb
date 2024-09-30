@@ -42,6 +42,14 @@ def proc_pid proc_num
   return $running_processes[proc_num][3][:pid]
 end
 
+def proc_stdin proc_id
+  if proc_id.is_a? String and proc_id[0] == '%'
+    proc_id = proc_pid proc_id[1..].to_i
+  end
+
+  return "/proc/#{proc_id}/fd/0"
+end
+
 def update_cmd_history new_command
   $logger.debug("update_cmd_history with #{new_command}")
 
@@ -509,19 +517,35 @@ Readline.completion_proc = proc do |cur_word|
   completion_list
 end
 
+=begin
+TODO:
 
-## comline executable
-#require 'optparse'
-#parser = OptionParser.new
-#
-#$logger.level = Logger::WARN
-#parser.on('-d', '--debug', 'DEBUG logging level') do |value|
-#  $logger.level = Logger::DEBUG
-#end
-#
-#parser.parse!
-#
-## TODO: make a proper command line utility here and then turn everything into a gem
-#exit_code = console $global_binding
-#$running_processes.each {|p| exit_code = p[3].value.exitstatus}
-#Kernel.exit exit_code
+The point to turn comline into a class
+is the need to launch multiple shells,
+possibly remote ones too.
+Then, I'd need to communicate between
+the shells. So, it needs some thinking.
+Shell is a wrapped Ruby interpreter.
+It changes Readline completion, and
+sets signal capture. But what if you
+launch multiple objects of it inside
+one process?
+
+Let's prototype it. Try to do something, then encode.
+Remote streams:
+https://unix.stackexchange.com/questions/34273/can-i-pipe-stdout-on-one-server-to-stdin-on-another-server
+Try:
+$ tar -cf - /path/to/backup/dir | ssh remotehost "cat - > backupfile.tar"
+-- I could compress it into one Ruby call like
+   tar .. > #{ssh_file "hostname:~/.../file"}
+   which which does whatever to make it work.
+
+And netcat:
+Similarly, netcat on both ends makes for a great simple, easy communication channel. tar cf - /path/to/dir | nc 1.2.3.4 5000 on one server, nc -l -p 5000 > backupfile.tar on the other.
+
+And implement a pipe into Ruby. I.e. stuff like
+echo hello > #{proc_stdin ...}
+It should be able to launch a thread or a process running some Ruby code, like SSH lib,
+with a stdin pipe open for the shell call.
+There are a bunch of moving pieces here.
+=end

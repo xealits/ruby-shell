@@ -26,8 +26,10 @@ filesystem changes, have some FSM on the running processes.
 
 Completion is still wonky.
 
+* actually, completion could be done like fzf or the [`ncurses_menu`](https://github.com/xealits/curses_menu)
 
-## Try next
+
+## Do list
 
 Ruby shell & multiple terminals -- try to bootstrap a cluster of computers over ssh?
 I.e. instead of having another tool to execute user commands remotely, use ssh.
@@ -37,6 +39,19 @@ Just explore what can be done with a normal-language shell.
 * Check Ruby’s SSH lib.
 * connect & disconnect comline to a process std streams & working directory:
   separate command & file history. It means having a proper comline class.
+  + turned Comline into a class, just in case. There are questions here.
+    It's about who handles the actual UI, like with the terminal VS stdandard streams.
+    Aside of the streams, there are signals, and also the `Readline` completion proc.
+* in general, what's next? The jobs management system - what about it?
+  + also, since it is a shell, it needs some capability for introspection
+    and exploratory presentation to the user -- that was one of the main problem I had to deal with way back
+
+* check serialisation in Ruby
+* check InfluxDB & its logs in Ruby
+  + and is there something nicer than Graphana to show the data?
+  + and it goes to OPC in Ruby (HTTP is there, sure)
+* try connecting to a serial port, Arduino or Ti or whatever,
+  with the [uart](https://tenderlovemaking.com/2024/02/16/using-serial-ports-with-ruby/) gem
 * Is it possible to change the environment variables of a running process?
 
 Each ssh session needs to know its ID etc. Which should be simple like `#{session_id}` etc.
@@ -50,8 +65,14 @@ It’s tricky to mix both. But, with `#{}` I can call a command too.
   because there is no such pipe from shell into Ruby. So, `proc_in` should create
   a temporary pipe, one end of which is open into the standard stream that is
   saved somewhere in Ruby.
+  + firstly, writing to a `/proc/<pid>/fd/0` works fine
+
 * if I launch a remote process, can I access its streams in comline easily?
   As if the streams are forwarded over SSH.
+  + writing over SSH should be easy like
+    ```
+    $ tar -cf - /path/to/backup/dir | ssh remotehost "cat - > backupfile.tar"
+    ```
 
 Also check mounting over ssh: sshfs.
 
@@ -110,6 +131,13 @@ kill 9902
 cleared 1 dead jobs
     stdin> jobs
     stdin> exit
+```
+
+Same things:
+
+```
+  0 stdin> echo "world" > #{proc_stdin proc_pid 0}
+  0 stdin> echo "world" > /proc/#{proc_pid 0}/fd/0
 ```
 
 Also:

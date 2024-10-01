@@ -2,19 +2,25 @@
 ##
 # a shell
 require 'ruby_shell'
+new_shell = Comline.new
 
 # comline executable
 require 'optparse'
 parser = OptionParser.new
 
-$logger.level = Logger::WARN
+new_shell.set_log_level Logger::WARN
 parser.on('-d', '--debug', 'DEBUG logging level') do |value|
-  $logger.level = Logger::DEBUG
+  #$logger.level = Logger::DEBUG
+  new_shell.set_log_level Logger::DEBUG
 end
 
 parser.parse!
 
 # TODO: make a proper command line utility here and then turn everything into a gem
-exit_code = console $global_binding
-$running_processes.each {|p| exit_code = p[3].value.exitstatus}
+exit_code = new_shell.console $global_binding
+#$running_processes.each {|p| exit_code = p[3].value.exitstatus}
+jobs_exit = new_shell.jobs_exit_code
+if jobs_exit
+  exit_code = jobs_exit
+end
 Kernel.exit exit_code

@@ -22,7 +22,8 @@ def is_int? s
 end
 
 class Comline
-  def initialize
+  def initialize name
+    @name = name
     @logger = Logger.new($stdout) # create a new logger that writes to the console
 
     #$tty_cmd = TTY::Command.new

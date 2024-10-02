@@ -42,17 +42,28 @@ Just explore what can be done with a normal-language shell.
   + turned Comline into a class, just in case. There are questions here.
     It's about who handles the actual UI, like with the terminal VS stdandard streams.
     Aside of the streams, there are signals, and also the `Readline` completion proc.
-* in general, what's next? The jobs management system - what about it?
+* in general, what's next? The jobs management system - what is it about? Erlang OTP?
   + also, since it is a shell, it needs some capability for introspection
     and exploratory presentation to the user -- that was one of the main problem I had to deal with way back
 
 * check serialisation in Ruby
 * check InfluxDB & its logs in Ruby
   + and is there something nicer than Graphana to show the data?
-  + and it goes to OPC in Ruby (HTTP is there, sure)
+  + and it goes to OPC in Ruby (HTTP is there, sure).
+    OPC or something OPC-like could actually work for the shell with its subprocesses.
+    I.e. now it gets names (sort of domain names for processes), hence you can
+    address processes like: host.computer/comline_foo/process_x.
+    Nested comlines and processes may follow some OPC-like standard for nested
+    browseable interfaces to whatever states they expose.
+
 * try connecting to a serial port, Arduino or Ti or whatever,
   with the [uart](https://tenderlovemaking.com/2024/02/16/using-serial-ports-with-ruby/) gem
 * Is it possible to change the environment variables of a running process?
+  [With `prctl`](https://unix.stackexchange.com/questions/302948/change-proc-pid-environ-after-process-start).
+  It's pretty complex. The standard `/proc/<pid>/environ` contains the original environment.
+  (Again, a typical unfinished Unix bit: the system does not expect processes to have their domain name spaces.
+   One OS is like one program. I.e. it is not a system of programs, but a system of _commands_ of one program.
+   Though, a system of programs turns into one program anyway.)
 
 Each ssh session needs to know its ID etc. Which should be simple like `#{session_id}` etc.
 
@@ -151,3 +162,7 @@ To kill a background process, use its `%<number>` from the `jobs` list:
 
 Somehow, `kill 0` kills the process and also terminates the shell.
 I.e. `popen3("kill 0")` terminates the Ruby interpreter?
+
+```
+xargs -0 -L1 -a /proc/self/environ
+```

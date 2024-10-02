@@ -3,6 +3,7 @@
 # a shell
 
 #require 'io/console'
+require 'io/wait'
 require 'open3'
 #require 'tty-command'
 require 'irb'
@@ -406,6 +407,9 @@ class Comline
         @current_binding = binding #TODO: why do I save the binding here? for Ctrl-C?
 
         # just use Process.spawn
+        # TODO damn, this works for Vim, yeah, but if I need to get the output to a remote pipe -- how to do that?
+        #      notice, it will stop working with remote Vim
+        #      the ssh etc probably emulate the terminal stuff precisely
         pid = Process.spawn(usr_command, :in=>STDIN, :out=>STDOUT, :err=>STDERR)
         Process.wait(pid)
         @last_exit_code = $?.exitstatus
@@ -441,8 +445,8 @@ class Comline
     # my Ruby 3.0.2 complains:
     # undefined method `console' for #<File:/proc/32672/fd/0> (NoMethodError)
     # Did you mean?  console_mode
-    @remote_stdin  = File.open("/proc/#{pid}/fd/0", "r+")
-    @remote_stdout = File.open("/proc/#{pid}/fd/1", "r+")
+    @remote_stdin  = File.open("/proc/#{pid}/fd/0", "w+")
+    @remote_stdout = File.open("/proc/#{pid}/fd/1", "r+") # I do not see any difference in changing the modes from r to w
     @remote_stderr = File.open("/proc/#{pid}/fd/2", "r+")
 
     # this stuff does not easily wirk if the program is launched interactively:
@@ -469,10 +473,25 @@ class Comline
     puts "reconnect syncs: #{@remote_stdin.sync} #{@remote_stdout.sync} #{@remote_stderr.sync}"
 
     #STDIN.reopen(@remote_stdin)
-    #STDOUT.reopen(@remote_stdout)
+    #STDOUT.reopen(@remote_stdout) # this stuff blocks
     #STDERR.reopen(@remote_stderr)
-    @remote_stdout.reopen(STDOUT)
-    @remote_stderr.reopen(STDERR)
+    #@remote_stdout.reopen(STDOUT) # does not print anything to the screen
+    #@remote_stderr.reopen(STDERR)
+    puts "done reconnect syncs"
+
+    # reading blocks
+    # hence add threads to read stdout and stderr
+    Thread.new { IO.copy_stream(@remote_stdout, STDOUT) }
+    Thread.new { IO.copy_stream(@remote_stderr, STDERR) }
+    # but this is sub-optimal too... it overrides stuff etc
+    # TODO:
+    # damn
+    # it is another gotcha with Unix commands/utilities -- async communication
+    # the command exit marks the end of the communication
+    # but how do you deal with a server/daemon-like command?
+    #
+    # that is why there was that other idea to have a some proper separation of buffers
+    # and curses-like UI showing them separately on the screen or whatever
   end
 
   def check_exit usr_command
@@ -513,6 +532,29 @@ class Comline
       #       -- it's again another way into having remote-Ruby interpreter problem
     else
       eval_cmd usr_command, at_binding
+    end
+
+    # eval_cmd blocks on an external command
+    # only the stream threads are slow
+    sleep 0.1
+
+    if @remote_stdout
+      #puts "reading remote streams: #{@remote_stdout.ready?.nil?}"
+      #puts "reading remote streams: #{@remote_stderr.ready?.nil?}"
+      #if @remote_stdout.ready?
+      #  #puts @remote_stdout.read_nonblock
+      #  puts @remote_stdout.read # and it blocks here
+      #end
+      #if @remote_stderr.ready?
+      #  puts @remote_stderr.read
+      #end
+      #while s = @remote_stdout.gets
+      #  puts s
+      #end
+      #while s = @remote_stderr.gets
+        #puts s
+      #end
+      puts "done reading"
     end
   end
 

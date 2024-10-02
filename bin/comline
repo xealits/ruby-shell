@@ -2,6 +2,7 @@
 ##
 # a shell
 require 'ruby_shell'
+require 'open3'
 
 
 #puts "$0 #{$0}"
@@ -35,6 +36,8 @@ parser = OptionParser.new do |opts|
 end
 
 parser.parse!
+puts "parsed! #{options}"
+
 ## now
 ## get positional argumemts from argv:
 #if ARGV.empty?
@@ -48,6 +51,13 @@ parser.parse!
 # https://github.com/djberg96/sys-proctable
 # TODO: more long-term, check in on Foreman and God process managing gems
 #       do job management via one of them?
+def find_named_shells
+  self_pid = $$
+  procs = `ps aux | grep "ruby.*comline.*name" | grep -v "grep\\|#{self_pid}"`
+  #procs.map {|p_str| p_str.split[1]} # return PID
+  procs.split "\n"
+end
+
 def find_shell_by_name name
   self_pid = $$
   procs = `ps aux | grep "ruby.*comline.*name" | grep -v "grep\\|#{self_pid}"`
@@ -55,20 +65,53 @@ def find_shell_by_name name
   procs.split "\n"
 end
 
+# TODO: if name is not given, it makes sense to
+#       1) check what named shells already run and suggest to connect to them
+#       2) launch a new named shell with a name
+
 if not options[:name]
   # relaunch itself
   # with a generated name
-  gen_name = 'foo'
-  pid = Process.spawn({'RBSHELL_NAME' => gen_name},
-                      $original_cmdline.join(' ') + " --name #{gen_name}",
-                      :in=>STDIN, :out=>STDOUT, :err=>STDERR)
-  Process.wait(pid)
-  last_exit_code = $?.exitstatus
-  Kernel.exit last_exit_code
+  #pid = Process.spawn({'RBSHELL_NAME' => shell_name},
+  #                    $original_cmdline.join(' ') + " --name #{shell_name}",
+  #                    :in=>STDIN, :out=>STDOUT, :err=>STDERR)
+  #Process.wait(pid)
+  #last_exit_code = $?.exitstatus
+  #Kernel.exit last_exit_code
+
+  named_shells = find_named_shells
+  if named_shells.length > 0
+    pid = named_shells[0].split() [1]
+    new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
+    exit_code = new_shell.console
+    Kernel.exit exit_code
+  end
+
+  #
+  # if no existing named shells - generate a name and launch a new one
+  shell_name = 'foo'
+
+else
+  shell_name = options[:name]
 end
 
-comline_name = options[:name]
-puts "got comline name #{comline_name}"
+=begin
+stdin, stdout, stderr, wait_thr = Open3.popen3({'RBSHELL_NAME' => shell_name},
+                                              $original_cmdline.join(' ') + " --name #{shell_name}")
+stdin.reopen(STDIN)
+stdout.reopen(STDOUT)
+stderr.reopen(STDERR)
+exit_code = wait_thr.value.exitstatus
+
+if exit_code
+  Kernel.exit exit_code
+else
+  Kernel.exit 0
+end
+=end
+
+comline_name = shell_name # options[:name]
+puts "got comline name #{comline_name} -- launching new shell"
 
 # if there is a name - set up a Comline object
 new_shell = Comline.new comline_name
@@ -78,6 +121,38 @@ new_shell.set_log_level options[:log_level]
 ENV["RBSHELL_NAME"] = comline_name
 puts "name = #{ENV["RBSHELL_NAME"]}"
 
+# let stdin mean the shell with pipe IO
+if options[:stdin]
+  exit_code = new_shell.console_stdin $global_binding
+
+else
+  # if not stdin -- launch popen3 process with stdin
+  puts "got comline name #{comline_name} -- spawn new shell via popen3"
+  command = $original_cmdline.join(' ') + " --name #{shell_name} --stdin"
+  puts "#{command}"
+  #stdin, stdout, stderr, wait_thr = Open3.popen3({'RBSHELL_NAME' => shell_name},
+  #                                              $original_cmdline.join(' ') + " --name #{shell_name} --stdin")
+  stdin, stdout, stderr, wait_thr = Open3.popen3(command)
+  #stdin.reopen(STDIN)
+  #stdout.reopen(STDOUT)
+  #stderr.reopen(STDERR)
+  #STDIN.reopen(stdin)
+  #STDOUT.reopen(stdout)
+  #STDERR.reopen(stderr)
+  #
+  new_shell.reconnect wait_thr[:pid]
+  #exit_code = wait_thr.value.exitstatus
+  exit_code = new_shell.console $global_binding
+  puts "done: #{wait_thr} #{exit_code}"
+end
+
+if exit_code
+  Kernel.exit exit_code
+else
+  Kernel.exit 0
+end
+
+=begin
 # and either connect to an existing one
 # TODO: "connect to an existing one" means not knowing its history of commands though
 #       all its internal Ruby state
@@ -100,8 +175,16 @@ if proc_info.length > 0
   #STDIN.reopen(process_stdin)
   #STDOUT.reopen(process_stdout)
   #STDERR.reopen(process_stderr)
-  exit_code = new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
+  #exit_code = new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
   # TODO: no new_shell.jobs_exit_code here! -- move jobs exits to the end of console then?
+
+  # launch the shell process, with popen3 - to open real pipes to its streams
+  stdin, stdout, stderr, wait_thr = Open3.popen3()
+  stdin.reopen(STDIN)
+  stdout.reopen(STDOUT)
+  stderr.reopen(STDERR)
+  exit_code = wait_thr.value.exitstatus
+  Kernel.exit exit_code
 
 end
   # TODO: make a proper command line utility here and then turn everything into a gem
@@ -113,6 +196,9 @@ end
   #end
 #end
 
+=end
+
+=begin
 if options[:stdin]
   exit_code = new_shell.console_stdin $global_binding
 else
@@ -124,3 +210,4 @@ if exit_code
 else
   Kernel.exit 0
 end
+=end

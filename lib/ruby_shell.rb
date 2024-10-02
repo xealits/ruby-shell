@@ -2,6 +2,7 @@
 ##
 # a shell
 
+#require 'io/console'
 require 'open3'
 #require 'tty-command'
 require 'irb'
@@ -432,10 +433,94 @@ class Comline
     end
   end
 
+  def reconnect pid
+    @logger.debug("reconnect a console")
+    # Open the running process's stdin and stdout
+    #@remote_stdin  = File.open("/proc/#{pid}/fd/0", "r+").console
+    # https://docs.ruby-lang.org/en/2.1.0/IO.html#method-c-console
+    # my Ruby 3.0.2 complains:
+    # undefined method `console' for #<File:/proc/32672/fd/0> (NoMethodError)
+    # Did you mean?  console_mode
+    @remote_stdin  = File.open("/proc/#{pid}/fd/0", "r+")
+    @remote_stdout = File.open("/proc/#{pid}/fd/1", "r+")
+    @remote_stderr = File.open("/proc/#{pid}/fd/2", "r+")
+
+    # this stuff does not easily wirk if the program is launched interactively:
+    # $ ls /proc/32672/fd -l
+    # total 0
+    # lrwx------ 1 alex alex 64 Oct  2 23:33 0 -> /dev/pts/3
+    # lrwx------ 1 alex alex 64 Oct  2 23:33 1 -> /dev/pts/3
+    # lrwx------ 1 alex alex 64 Oct  2 23:33 2 -> /dev/pts/3
+    # echo ls > /dev/pts/3
+    # does not get a line into stdin.readline here
+    # this connection works with a shell in the README example
+    # because it is opened with popen3, which creates pipes for the process std streams
+    # then you send the bytes down the pipe and everything works
+    # TODO: another reason to separate the UI and pipe-shell parts
+    #       or try to get the console from under a file
+    #       -- if it will work
+    #       https://docs.ruby-lang.org/en/2.1.0/IO.html#class-IO-label-io-2Fconsole
+    #       my Ruby 3.0.2 does not have this method
+    #       let's go with the pipes
+
+    @remote_stdin.sync  = true
+    @remote_stdout.sync = true
+    @remote_stderr.sync = true
+    puts "reconnect syncs: #{@remote_stdin.sync} #{@remote_stdout.sync} #{@remote_stderr.sync}"
+
+    #STDIN.reopen(@remote_stdin)
+    #STDOUT.reopen(@remote_stdout)
+    #STDERR.reopen(@remote_stderr)
+    @remote_stdout.reopen(STDOUT)
+    @remote_stderr.reopen(STDERR)
+  end
+
+  def check_exit usr_command
+    if usr_command.strip[...4] == 'exit'
+      @logger.debug("exit command")
+      # clear dead jobs and kill the running background processes
+      clear_dead_jobs
+
+      if @running_processes.length > 0
+        puts "killing #{@running_processes.length} active backgroun processes"
+        @running_processes.each do |_, _, _, wait_thr|
+          `kill -KILL #{wait_thr[:pid]}`
+          @last_exit_code = wait_thr.value.exitstatus
+        end
+        clear_dead_jobs
+      end
+
+      exit_code = usr_command.strip[4...]
+      if exit_code
+        return usr_command.strip[4...].to_i # TODO: to move jobs exits here ?
+      else
+        return 0
+      end
+      # no: the jobs are cleared, and their exit codes are in @last_exit_code
+      #     which is not used actually!
+      #
+    else
+      return nil
+    end
+  end
+
+  def process_command usr_command, at_binding=nil
+    #
+    if @remote_stdin
+      @remote_stdin.write_nonblock usr_command + "\n"
+      # TODO: so, it does not work. The commands do show up on the remote_stdin but the remote does not process them via Readline.
+      #       should I have 2 processes: a Readline UI and a shell processing the commands?
+      #       -- it's again another way into having remote-Ruby interpreter problem
+    else
+      eval_cmd usr_command, at_binding
+    end
+  end
+
   def console (at_binding = nil)
     @logger.debug("launch a console")
 
     while usr_command = Readline.readline(eval('"' + @prompt + '"'))
+      puts "got a Readline input! #{usr_command}"
       #puts "#{@global_binding} #{@current_binding} | #{at_binding}"
       if usr_command.strip.empty?
         next
@@ -444,25 +529,29 @@ class Comline
       # if it is not empty -- add it to history
       # or TODO: add it if it succeeded
       Readline::HISTORY.push usr_command
-      if usr_command.strip[...4] == 'exit'
-        @logger.debug("exit command")
-        # clear dead jobs and kill the running background processes
-        clear_dead_jobs
 
-        if @running_processes.length > 0
-          puts "killing #{@running_processes.length} active backgroun processes"
-          @running_processes.each do |_, _, _, wait_thr|
-            `kill -KILL #{wait_thr[:pid]}`
-            @last_exit_code = wait_thr.value.exitstatus
-          end
-          clear_dead_jobs
-        end
-
-        return usr_command.strip[4...].to_i
-
-      else
-        eval_cmd usr_command, at_binding
+      if check_exit usr_command
+        break
       end
+      process_command usr_command, at_binding
+    end
+
+    # jobs exits
+  end
+
+  def console_stdin at_binding = nil
+    @logger.debug("launch a console_stdin")
+
+    while usr_command = STDIN.gets
+      puts "got console_stdin input #{usr_command}"
+      if usr_command.strip.empty?
+        next
+      end
+
+      if check_exit usr_command
+        break
+      end
+      process_command usr_command, at_binding
     end
   end
 

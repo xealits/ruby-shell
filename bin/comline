@@ -18,7 +18,8 @@ options = {:log_level => Logger::WARN, :name => nil}
 parser = OptionParser.new do |opts|
   #opts.banner = "Usage: comline [options] [name]"
 
-  opts.on('-n', '--name', 'Name for the Ruby shell. If not given, it will relaunch with a random name') do |value|
+  opts.on('-n=NAME', '--name=NAME', 'Name for the Ruby shell. If not given, it will relaunch with a random name') do |value|
+    puts "got comline name #{value}"
     options[:name] = value
   end
 
@@ -27,6 +28,10 @@ parser = OptionParser.new do |opts|
     options[:log_level] = Logger::DEBUG
   end
 
+  opts.on('-s', '--stdin', 'launch a simple STDIN comline') do |value|
+    #$logger.level = Logger::DEBUG
+    options[:stdin] = value
+  end
 end
 
 parser.parse!
@@ -39,6 +44,17 @@ parser.parse!
 #  comline_name = ARGV.pop
 #end
 
+# TODO: use proctable gem
+# https://github.com/djberg96/sys-proctable
+# TODO: more long-term, check in on Foreman and God process managing gems
+#       do job management via one of them?
+def find_shell_by_name name
+  self_pid = $$
+  procs = `ps aux | grep "ruby.*comline.*name" | grep -v "grep\\|#{self_pid}"`
+  #procs.map {|p_str| p_str.split[1]} # return PID
+  procs.split "\n"
+end
+
 if not options[:name]
   # relaunch itself
   # with a generated name
@@ -47,23 +63,64 @@ if not options[:name]
                       $original_cmdline.join(' ') + " --name #{gen_name}",
                       :in=>STDIN, :out=>STDOUT, :err=>STDERR)
   Process.wait(pid)
-  @last_exit_code = $?.exitstatus
+  last_exit_code = $?.exitstatus
+  Kernel.exit last_exit_code
+end
 
-else
-  comline_name = 'foo'
-  new_shell = Comline.new comline_name
-  new_shell.set_log_level options[:log_level]
+comline_name = options[:name]
+puts "got comline name #{comline_name}"
 
-  # also set the name in environment for other processes
-  ENV["RBSHELL_NAME"] = comline_name
-  puts "name = #{ENV["RBSHELL_NAME"]}"
+# if there is a name - set up a Comline object
+new_shell = Comline.new comline_name
+new_shell.set_log_level options[:log_level]
 
-  # TODO: make a proper command line utility here and then turn everything into a gem
-  exit_code = new_shell.console $global_binding
-  #$running_processes.each {|p| exit_code = p[3].value.exitstatus}
-  jobs_exit = new_shell.jobs_exit_code
-  if jobs_exit
-    exit_code = jobs_exit
+# also set the name in environment for other processes
+ENV["RBSHELL_NAME"] = comline_name
+puts "name = #{ENV["RBSHELL_NAME"]}"
+
+# and either connect to an existing one
+# TODO: "connect to an existing one" means not knowing its history of commands though
+#       all its internal Ruby state
+#       -- the readline stuff should be serialised and transfered to the new console?
+#       not just readline - the jobs too, their exit statuses are needed on exit
+# or launch a new process
+# try to find a shell with this name
+proc_info = find_shell_by_name comline_name
+if proc_info.length > 0
+  # connect to it
+  if proc_info.length > 1
+    puts "more than one comline with name #{comline_name}:\n#{proc_info}"
   end
+
+  pid = proc_info[0].split() [1]
+  puts proc_info[0]
+  puts "connecting to an already running comline with name #{comline_name}:\n#{proc_info[0].split}\n#{pid}\n..."
+
+  # Reopen Ruby's STDIN and STDOUT to point to the process's stdin and stdout
+  #STDIN.reopen(process_stdin)
+  #STDOUT.reopen(process_stdout)
+  #STDERR.reopen(process_stderr)
+  exit_code = new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
+  # TODO: no new_shell.jobs_exit_code here! -- move jobs exits to the end of console then?
+
+end
+  # TODO: make a proper command line utility here and then turn everything into a gem
+  #$running_processes.each {|p| exit_code = p[3].value.exitstatus}
+  # TODO: check, but it looks like no,  these jobs_exit_code is never actually used
+  #jobs_exit = new_shell.jobs_exit_code
+  #if jobs_exit
+  #  exit_code = jobs_exit
+  #end
+#end
+
+if options[:stdin]
+  exit_code = new_shell.console_stdin $global_binding
+else
+  exit_code = new_shell.console $global_binding
+end
+
+if exit_code
   Kernel.exit exit_code
+else
+  Kernel.exit 0
 end

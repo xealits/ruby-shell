@@ -65,9 +65,9 @@ def find_shell_by_name name
   procs.split "\n"
 end
 
-# TODO: if name is not given, it makes sense to
-#       1) check what named shells already run and suggest to connect to them
-#       2) launch a new named shell with a name
+# if name is not given, it makes sense to
+# 1) check what named shells already run and suggest to connect to them
+# 2) launch a new named shell with a generated name
 
 if not options[:name]
   # relaunch itself
@@ -110,15 +110,14 @@ else
 end
 =end
 
-comline_name = shell_name # options[:name]
-puts "got comline name #{comline_name} -- launching new shell"
+puts "got comline name #{shell_name} -- launching new shell"
 
 # if there is a name - set up a Comline object
-new_shell = Comline.new comline_name
+new_shell = Comline.new shell_name
 new_shell.set_log_level options[:log_level]
 
 # also set the name in environment for other processes
-ENV["RBSHELL_NAME"] = comline_name
+ENV["RBSHELL_NAME"] = shell_name
 puts "name = #{ENV["RBSHELL_NAME"]}"
 
 # let stdin mean the shell with pipe IO
@@ -127,23 +126,24 @@ if options[:stdin]
 
 else
   # if not stdin -- launch popen3 process with stdin
-  puts "got comline name #{comline_name} -- spawn new shell via popen3"
-  command = $original_cmdline.join(' ') + " --name #{shell_name} --stdin"
-  puts "#{command}"
+  puts "got comline name #{shell_name} -- spawn new shell via popen3"
+  #command = $original_cmdline.join(' ') + " --name #{shell_name} --stdin"
+  # no, launch as is, without stdin
+  #command = $original_cmdline.join(' ') + " --name #{shell_name}"
+  #puts "#{command}"
   #stdin, stdout, stderr, wait_thr = Open3.popen3({'RBSHELL_NAME' => shell_name},
   #                                              $original_cmdline.join(' ') + " --name #{shell_name} --stdin")
-  stdin, stdout, stderr, wait_thr = Open3.popen3(command)
-  #stdin.reopen(STDIN)
-  #stdout.reopen(STDOUT)
-  #stderr.reopen(STDERR)
-  #STDIN.reopen(stdin)
-  #STDOUT.reopen(stdout)
-  #STDERR.reopen(stderr)
-  #
-  new_shell.reconnect wait_thr[:pid]
-  #exit_code = wait_thr.value.exitstatus
+  #stdin, stdout, stderr, wait_thr = Open3.popen3(command)
+  #new_shell.reconnect wait_thr[:pid]
+  #exit_code = new_shell.console $global_binding
+  #puts "done: #{wait_thr} #{exit_code}"
+
+  # no, no pipes, directly connect the terminal
+  # just open the comline
+  # with direct connection to the terminal
   exit_code = new_shell.console $global_binding
-  puts "done: #{wait_thr} #{exit_code}"
+
+  puts "done: #{exit_code}"
 end
 
 if exit_code
@@ -151,63 +151,3 @@ if exit_code
 else
   Kernel.exit 0
 end
-
-=begin
-# and either connect to an existing one
-# TODO: "connect to an existing one" means not knowing its history of commands though
-#       all its internal Ruby state
-#       -- the readline stuff should be serialised and transfered to the new console?
-#       not just readline - the jobs too, their exit statuses are needed on exit
-# or launch a new process
-# try to find a shell with this name
-proc_info = find_shell_by_name comline_name
-if proc_info.length > 0
-  # connect to it
-  if proc_info.length > 1
-    puts "more than one comline with name #{comline_name}:\n#{proc_info}"
-  end
-
-  pid = proc_info[0].split() [1]
-  puts proc_info[0]
-  puts "connecting to an already running comline with name #{comline_name}:\n#{proc_info[0].split}\n#{pid}\n..."
-
-  # Reopen Ruby's STDIN and STDOUT to point to the process's stdin and stdout
-  #STDIN.reopen(process_stdin)
-  #STDOUT.reopen(process_stdout)
-  #STDERR.reopen(process_stderr)
-  #exit_code = new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
-  # TODO: no new_shell.jobs_exit_code here! -- move jobs exits to the end of console then?
-
-  # launch the shell process, with popen3 - to open real pipes to its streams
-  stdin, stdout, stderr, wait_thr = Open3.popen3()
-  stdin.reopen(STDIN)
-  stdout.reopen(STDOUT)
-  stderr.reopen(STDERR)
-  exit_code = wait_thr.value.exitstatus
-  Kernel.exit exit_code
-
-end
-  # TODO: make a proper command line utility here and then turn everything into a gem
-  #$running_processes.each {|p| exit_code = p[3].value.exitstatus}
-  # TODO: check, but it looks like no,  these jobs_exit_code is never actually used
-  #jobs_exit = new_shell.jobs_exit_code
-  #if jobs_exit
-  #  exit_code = jobs_exit
-  #end
-#end
-
-=end
-
-=begin
-if options[:stdin]
-  exit_code = new_shell.console_stdin $global_binding
-else
-  exit_code = new_shell.console $global_binding
-end
-
-if exit_code
-  Kernel.exit exit_code
-else
-  Kernel.exit 0
-end
-=end

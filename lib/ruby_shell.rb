@@ -562,7 +562,7 @@ class Comline
     @logger.debug("launch a console")
 
     while usr_command = Readline.readline(eval('"' + @prompt + '"'))
-      puts "got a Readline input! #{usr_command}"
+      @logger.debug "got a Readline input! #{usr_command}"
       #puts "#{@global_binding} #{@current_binding} | #{at_binding}"
       if usr_command.strip.empty?
         next

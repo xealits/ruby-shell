@@ -110,7 +110,7 @@ This works:
 ```
    0 stdin> stdbuf -o0 sh &
  launched a process 24148
-   0 stdin> xterm -fg grey -bg black -e ./ruby_read_fd.rb #{proc_pid(0)} &
+   0 stdin> xterm -fg grey -bg black -e lib/ruby_read_fd.rb #{proc_pid(0)} &
  launched a process 24151
    0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/#{proc_pid(0)}/fd/0' &
  launched a process 24154

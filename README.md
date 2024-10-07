@@ -2,6 +2,8 @@ A simple shell program in Ruby: run external commands, spawn processes and manag
 
 ```
 ruby -Ilib bin/comline
+
+screen -S foobar ruby -Ilib bin/comline --name foobar
 ```
 
 Or build and install the gem (it is not on rubygems.org yet):
@@ -163,6 +165,17 @@ To kill a background process, use its `%<number>` from the `jobs` list:
 Somehow, `kill 0` kills the process and also terminates the shell.
 I.e. `popen3("kill 0")` terminates the Ruby interpreter?
 
+Change the delimiters of 0-separated strings in proc:
+
 ```
 xargs -0 -L1 -a /proc/self/environ
+```
+
+Hot-reloading `Comline` class somehow does not work:
+
+```
+  0      foo stdin> echo "#{load 'lib/ruby_shell.rb'}"
+true
+  0      foo stdin>
+# here I changed the rjsut to ljust in the prompt
 ```

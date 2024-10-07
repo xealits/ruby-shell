@@ -5,12 +5,8 @@ require 'ruby_shell'
 require 'open3'
 
 
-#puts "$0 #{$0}"
-#puts "ARGVS: #{ARGV}"
 $original_cmdline = []
 File.open("/proc/self/cmdline") {|file| $original_cmdline = file.read.split "\0"}
-#puts $original_cmdline
-#puts $original_cmdline.length
 
 # comline executable
 require 'optparse'
@@ -70,16 +66,10 @@ end
 # 2) launch a new named shell with a generated name
 
 if not options[:name]
-  # relaunch itself
-  # with a generated name
-  #pid = Process.spawn({'RBSHELL_NAME' => shell_name},
-  #                    $original_cmdline.join(' ') + " --name #{shell_name}",
-  #                    :in=>STDIN, :out=>STDOUT, :err=>STDERR)
-  #Process.wait(pid)
-  #last_exit_code = $?.exitstatus
-  #Kernel.exit last_exit_code
-
   named_shells = find_named_shells
+  # get the logger here
+  puts "Warning: found running shells: #{named_shells}"
+
   if named_shells.length > 0
     pid = named_shells[0].split() [1]
     new_shell.reconnect pid # process_stdin, process_stdout, process_stderr
@@ -89,26 +79,12 @@ if not options[:name]
 
   #
   # if no existing named shells - generate a name and launch a new one
+  # TODO: generate a name
   shell_name = 'foo'
 
 else
   shell_name = options[:name]
 end
-
-=begin
-stdin, stdout, stderr, wait_thr = Open3.popen3({'RBSHELL_NAME' => shell_name},
-                                              $original_cmdline.join(' ') + " --name #{shell_name}")
-stdin.reopen(STDIN)
-stdout.reopen(STDOUT)
-stderr.reopen(STDERR)
-exit_code = wait_thr.value.exitstatus
-
-if exit_code
-  Kernel.exit exit_code
-else
-  Kernel.exit 0
-end
-=end
 
 puts "got comline name #{shell_name} -- launching new shell"
 
@@ -125,25 +101,9 @@ if options[:stdin]
   exit_code = new_shell.console_stdin $global_binding
 
 else
-  # if not stdin -- launch popen3 process with stdin
-  puts "got comline name #{shell_name} -- spawn new shell via popen3"
-  #command = $original_cmdline.join(' ') + " --name #{shell_name} --stdin"
-  # no, launch as is, without stdin
-  #command = $original_cmdline.join(' ') + " --name #{shell_name}"
-  #puts "#{command}"
-  #stdin, stdout, stderr, wait_thr = Open3.popen3({'RBSHELL_NAME' => shell_name},
-  #                                              $original_cmdline.join(' ') + " --name #{shell_name} --stdin")
-  #stdin, stdout, stderr, wait_thr = Open3.popen3(command)
-  #new_shell.reconnect wait_thr[:pid]
-  #exit_code = new_shell.console $global_binding
-  #puts "done: #{wait_thr} #{exit_code}"
-
-  # no, no pipes, directly connect the terminal
-  # just open the comline
-  # with direct connection to the terminal
+  # if not stdin -- launch a shell with terminal
+  puts "got comline name #{shell_name} -- launching"
   exit_code = new_shell.console $global_binding
-
-  puts "done: #{exit_code}"
 end
 
 if exit_code

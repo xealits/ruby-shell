@@ -33,7 +33,7 @@ class Comline
     # a test thing
     @x = 55
 
-    @prompt = '#{$last_exit_code.to_s.rjust 3} stdin> '
+    @prompt = '#{@last_exit_code.to_s.rjust 3} #{@name.ljust 8} stdin> '
     @last_exit_code = 0
     @running_processes = []
 
@@ -280,6 +280,18 @@ class Comline
       alias_name = command[1]
       alias_val  = command[2..].join ' '
       @aliases[alias_name] = alias_val
+      return
+
+    elsif command[0] == 'spawn'
+      subname = command[1]
+      spawn_command = "screen -S #{@name}.#{subname} ruby -Ilib bin/comline --name #{@name}.#{subname}"
+      pid = Process.spawn(spawn_command, :in=>STDIN, :out=>STDOUT, :err=>STDERR)
+      Process.wait(pid)
+      # if I spawn a screen, and detach - does the control flow break out here?
+      # yes, it does!
+      # TODO: notice, when outer comline exits, it does not kill the subdomain shells - is that OK?
+      @last_exit_code = $?.exitstatus
+      puts "ended a spawn special command: #{pid} #{@last_exit_code}"
       return
 
     elsif command[0] == 'jobs'

@@ -54,3 +54,32 @@ How it will work with launching remote processes?
 Ok, worth to try this mix. If it works, then maybe a Ruby `screen` could be useful,
 like the archived [ruby-screen](https://github.com/dpetersen/ruby-screen).
 
+Copy to a remote `stdin`:
+
+```
+$ tar -cf - /path/to/backup/dir | ssh remotehost "cat - > backupfile.tar"
+
+> tar -cf - /path/to/backup/dir | #{remote_stdin "remotehost" "domain.name.ruby_shell"}
+
+def remote_stdin hostname domainname
+  ssh to hostname
+  search a proc with domainname in RBSHELL_NAME env
+  return
+  ssh hostname "cat - > /proc/<pid>/fd/0
+end
+```
+
+The addressing could also be something like `remotehost/ruby_shell/domain/name`.
+
+
+
+# Addressing processes & domain naming them
+
+Using environment variables to mark a process as named?
+It's not great because child processes inherit the variables.
+
+Maintain processes under a running Ruby comline?
+Maight be the way to go: the same commands are used interactively and remotely.
+How do you interact nicely with a comline that runs in a screen terminal?
+The screen `stuff` and `hardcopy` commands are not that great really.
+

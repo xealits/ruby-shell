@@ -54,7 +54,7 @@ Just explore what can be done with a normal-language shell.
   + and it goes to OPC in Ruby (HTTP is there, sure).
     OPC or something OPC-like could actually work for the shell with its subprocesses.
     I.e. now it gets names (sort of domain names for processes), hence you can
-    address processes like: host.computer/comline_foo/process_x.
+    address processes like: `host.computer/comline_foo/process_x`.
     Nested comlines and processes may follow some OPC-like standard for nested
     browseable interfaces to whatever states they expose.
 
@@ -112,7 +112,7 @@ This works:
 ```
    0 stdin> stdbuf -o0 sh &
  launched a process 24148
-   0 stdin> xterm -fg grey -bg black -e lib/ruby_read_fd.rb #{proc_pid(0)} &
+   0 stdin> xterm -fg grey -bg black -e lib/fd_read.rb #{proc_pid(0)} &
  launched a process 24151
    0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/#{proc_pid(0)}/fd/0' &
  launched a process 24154

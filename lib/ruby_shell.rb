@@ -23,6 +23,81 @@ def is_int? s
   true if Integer(s) rescue false
 end
 
+def ps_list hostname=nil
+  if hostname # not nil
+    return `ssh "ps u"`.split "\n"
+  else
+    `ps u`.split "\n"
+  end
+end
+
+def pids_named procname, hostname=nil
+  # search only in the user processes
+  prs = ps_list hostname
+  #prs.grep(/RBSHELL_NAME/)[0].split[1]
+  prs.grep(/RBSHELL_NAME/).map {|ps_str| ps_str.split[1]}
+end
+
+def pid_fd pid, fd_num
+  return "/proc/#{pids}/fd/#{fd_num}"
+end
+
+def proc_fd procname, fd_num, hostname=nil
+  pids = pids_named procname, hostname
+  # return only first proc
+  if pids.length > 0
+    return pid_fd pids[0], fd_num
+  else
+    return nil
+  end
+end
+
+def proc_stdin  procname, hostname=nil
+  proc_fd procname, 0, hostname
+end
+
+def proc_stdout procname, hostname=nil
+  proc_fd procname, 1, hostname
+end
+
+def proc_stderr procname, hostname=nil
+  proc_fd procname, 2, hostname
+end
+
+def remote_fd procname, fd_num, hostname
+  fd_path = proc_fd procname, fd_num, hostname
+  if fd_path == nil
+    # throw exception
+    raise "Not found a remote proc #{procname} on host #{hostname}"
+  end
+  return fd_path, hostname
+end
+
+# support this sort of command:
+#$ tar -cf - /path/to/backup/dir | ssh remotehost "cat - > backupfile.tar"
+#> tar -cf - /path/to/backup/dir | #{remote_stdin "remotehost" "domain.name.ruby_shell"}
+def remote_fd_write procname, fd_num, hostname
+  fd_path, hostname = remote_fd procname, fd_num, hostname
+  return "ssh #{hostname} \"cat - > #{fd_path}\""
+end
+
+def remote_fd_read  procname, fd_num, hostname
+  fd_path, hostname = remote_fd procname, fd_num, hostname
+  return "ssh #{hostname} \"tail -f #{fd_path}\""
+end
+
+def remote_stdin  procname, hostname
+  remote_fd_write  procname, 0, hostname
+end
+
+def remote_stdout procname, hostname
+  remote_fd_read  procname, 1, hostname
+end
+
+def remote_stderr procname, hostname
+  remote_fd_read  procname, 2, hostname
+end
+
 class Comline
   def initialize name
     @name = name
@@ -437,7 +512,7 @@ class Comline
       # this works:
       #   0 stdin> stdbuf -o0 sh
       # launched a process 24148
-      #   0 stdin> xterm -fg grey -bg black -e ./ruby_read_fd.rb 24148
+      #   0 stdin> xterm -fg grey -bg black -e ./fd_read.rb 24148
       # launched a process 24151
       #   0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/24148/fd/0'
       # launched a process 24154

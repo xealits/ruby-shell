@@ -69,6 +69,21 @@ def remote_stdin hostname domainname
 end
 ```
 
+Remote ruby:
+
+```
+RBSHELL_NAME=ruby.name cat - > foobar_test
+```
+
+Local:
+
+```
+  0 foobar   stdin> echo #{remote_stdin 'ruby.name', 'bubuntu1' }
+ssh bubuntu1 cat - > /proc/46554/fd/0
+  0 foobar   stdin> echo hey | #{remote_stdin 'ruby.name', 'bubuntu1' }
+  0 foobar   stdin> echo hello world! | #{remote_stdin 'ruby.name', 'bubuntu1' }
+```
+
 The addressing could also be something like `remotehost/ruby_shell/domain/name`.
 
 

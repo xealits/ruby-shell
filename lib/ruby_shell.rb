@@ -25,7 +25,7 @@ end
 
 def ps_list hostname=nil
   if hostname # not nil
-    return `ssh "ps u"`.split "\n"
+    return `ssh #{hostname} "ps u"`.split "\n"
   else
     `ps u`.split "\n"
   end
@@ -35,11 +35,12 @@ def pids_named procname, hostname=nil
   # search only in the user processes
   prs = ps_list hostname
   #prs.grep(/RBSHELL_NAME/)[0].split[1]
-  prs.grep(/RBSHELL_NAME/).map {|ps_str| ps_str.split[1]}
+  # TODO: this regexp is faulty?
+  prs.grep(/RBSHELL_NAME=#{procname} /).map {|ps_str| ps_str.split[1]}
 end
 
 def pid_fd pid, fd_num
-  return "/proc/#{pids}/fd/#{fd_num}"
+  return "/proc/#{pid}/fd/#{fd_num}"
 end
 
 def proc_fd procname, fd_num, hostname=nil

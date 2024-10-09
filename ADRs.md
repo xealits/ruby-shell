@@ -82,6 +82,17 @@ Local:
 ssh bubuntu1 cat - > /proc/46554/fd/0
   0 foobar   stdin> echo hey | #{remote_stdin 'ruby.name', 'bubuntu1' }
   0 foobar   stdin> echo hello world! | #{remote_stdin 'ruby.name', 'bubuntu1' }
+  0 foobar   stdin> echo "#{ps_list("bubuntu1").join "\n"}"
+  0 foobar   stdin> ssh -t bubuntu1 screen -x
+```
+
+[Detach a nested screen session](https://wiki.archlinux.org/title/GNU_Screen#Nested_Screen_Sessions) with `Ctrl+a a d`.
+
+Not the best way to address stdout with `tail -f`:
+
+```
+  0 foobar   stdin> echo #{remote_stdout 'ruby.name', 'bubuntu1' }
+ssh bubuntu1 tail -f /proc/51551/fd/1
 ```
 
 The addressing could also be something like `remotehost/ruby_shell/domain/name`.

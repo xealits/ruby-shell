@@ -619,7 +619,12 @@ class Comline
       #       should I have 2 processes: a Readline UI and a shell processing the commands?
       #       -- it's again another way into having remote-Ruby interpreter problem
     else
-      eval_cmd usr_command, at_binding
+
+      begin
+        eval_cmd usr_command, at_binding
+      rescue => error
+        p error.message
+      end
     end
 
     # eval_cmd blocks on an external command

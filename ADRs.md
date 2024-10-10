@@ -30,7 +30,7 @@ That's on top of the basic features: the terminal environment, and the session n
 * If so, then find how to get stdout as a pipe out of `screen` etc.
   GNU [screen buffer](https://askubuntu.com/questions/817007/save-stdout-and-stderr-of-programs-running-under-gnu-screen-when-you-forgot-to-r).
   It can also periodically [log to files](https://www.gnu.org/software/screen/manual/html_node/Log.html).
-  You can detach [nested session](https://wiki.archlinux.org/title/GNU_Screen#Nested_Screen_Sessions)
+  You can detach a [nested session](https://wiki.archlinux.org/title/GNU_Screen#Nested_Screen_Sessions)
   with `Ctrl+a a d`.
 
 This way, every process gets its own domain name, including comline itself.
@@ -43,19 +43,31 @@ Otherwise, the process is connected to pipes.
 
 * Probably the important point is to not need to connect to terminal input & output.
   I.e. the terminal must serve only as the UI. The programmable processes, with pipes,
-  should be spawned and connected as background jobs. It should also include the dependencies
-  and an FSM between processes?
+  should be spawned and connected as background jobs.
+
+  It should also include the dependencies and an FSM between processes? A Foreman or God gem?
+  That would be more like "a proper language for FSM", not for shell.
 
   The application is some kind of automation: the processes print their state updates
   as serial protocol to stdout or something like that. I.e. the basic interface is made of
   just pipes and some simple protocol. The point is that it's a very common infrastructure.
 
-  - How it fits to MQTT? Check NNG pattern to provide multiple-consumers subscribtions
-    to these stdout Data Points.
-  - Check out serialisation protocols. The simpler the better.
+  - How it fits into MQTT?
+  - Check NNG pattern to provide multiple-consumers subscribtions to these stdout Data Points.
+    Pipes have limited capacity. So, if real logging is needed, it means something more serious.
+    Check Ruby influx gems for a basic logger.
+  - Is it worth to just check OPC implementations in Ruby? OPC provides a lot. But at the same time,
+    It may not be that flexible. Also to mention, Ruby has Rails. Maybe it's better to just send around
+    some protocol, and react to the messages.
+  - Check out serialisation protocols. The simpler the better. It is supposed to be "a very common infrastructure".
     And make a simple test app, like barometric sensors on serial console + a protocol + a TUI ASCII typography?
+    Or like a bunch of servos on a BeagleBone?
   - Check out GraphQL and API-building on top of it. It seems like the right thing,
     but without the commit time series and the config "branches".
+
+* In UI case, it would be better to always run under screen, with session names,
+  to easily track and connect to different sessions.
+  If so, it could be better to use [ruby-scree](https://github.com/dpetersen/ruby-screen).
 
 * At the same time, it may make sense to be able to launch comline as `--stdin`?
   Or maybe with a proper input protocol? This is like the `cockpit` for `systemd` thing.

@@ -43,6 +43,10 @@ puts "parsed! #{options}"
 #  comline_name = ARGV.pop
 #end
 
+# if name is not given, it makes sense to
+# 1) check what named shells already run and suggest to connect to them
+# 2) launch a new named shell with a generated name
+
 # TODO: use proctable gem
 # https://github.com/djberg96/sys-proctable
 # TODO: more long-term, check in on Foreman and God process managing gems
@@ -54,22 +58,13 @@ def find_named_shells
   procs.split "\n"
 end
 
-def find_shell_by_name name
-  self_pid = $$
-  procs = `ps aux | grep "ruby.*comline.*name" | grep -v "grep\\|#{self_pid}"`
-  #procs.map {|p_str| p_str.split[1]} # return PID
-  procs.split "\n"
-end
-
-# if name is not given, it makes sense to
-# 1) check what named shells already run and suggest to connect to them
-# 2) launch a new named shell with a generated name
-
 if not options[:name]
   named_shells = find_named_shells
   # get the logger here
   puts "Warning: found running shells: #{named_shells}"
 
+  # TODO: reconnecting doesn't work, does it?
+  # it should also grep the existing names -- connect to the same name
   if named_shells.length > 0
     pid = named_shells[0].split() [1]
     new_shell.reconnect pid # process_stdin, process_stdout, process_stderr

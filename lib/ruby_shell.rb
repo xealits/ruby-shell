@@ -100,8 +100,9 @@ def remote_stderr procname, hostname
 end
 
 class Comline
-  def initialize name
+  def initialize name, is_pipe_input
     @name = name
+    @is_pipe_input = is_pipe_input
     @logger = Logger.new($stdout) # create a new logger that writes to the console
 
     #$tty_cmd = TTY::Command.new
@@ -119,11 +120,11 @@ class Comline
     @cwd_max_length = 5
     @home_dir_aliases = ['~', '']
 
-    @aliases = {}
+    @aliases = {'ls' => 'ls --color=auto'}
 
-    @global_binding  = binding
-    @current_binding = $global_binding
-    #puts "#{$global_binding} #{$current_binding}"
+    @comline_binding  = binding
+    @current_binding = $comline_binding
+    #puts "#{$comline_binding} #{$current_binding}"
 
     # make the shell continue if "terminal stop" SIGTSTP Ctrl-Z is sent (the current process should go to background and sleep)
     # TODO: figure out how to handle this
@@ -132,11 +133,11 @@ class Comline
 
       #console binding # this launches a new console, inside of the original that got stopped
       # return from the stopped binding
-      #puts "#{$global_binding} #{$current_binding}"
+      #puts "#{$comline_binding} #{$current_binding}"
 
-      if @current_binding != @global_binding
+      if @current_binding != @comline_binding
         proc_binding = @current_binding
-        @current_binding = @global_binding
+        @current_binding = @comline_binding
         proc_binding.eval("return 0")
       end
     }
@@ -502,21 +503,9 @@ class Comline
         Process.wait(pid)
         @last_exit_code = $?.exitstatus
 
-        @current_binding = @global_binding # restore
+        @current_binding = @comline_binding # restore
         return @last_exit_code
       end
-
-      # TODO: retry this:
-      # does not really work:
-      # xterm, screen, etc launch something and do not matter themselves
-      # how to get the pid of the screen session, shell/fish that they opened?
-      # this works:
-      #   0 stdin> stdbuf -o0 sh
-      # launched a process 24148
-      #   0 stdin> xterm -fg grey -bg black -e ./fd_read.rb 24148
-      # launched a process 24151
-      #   0 stdin> xterm -fg grey -bg black -e 'cat >> /proc/24148/fd/0'
-      # launched a process 24154
 
     rescue Errno::ENOENT => error
       # command not found
@@ -583,35 +572,29 @@ class Comline
   end
 
   def check_exit usr_command
-    if usr_command.strip[...4] == 'exit'
-      @logger.debug("exit command")
-      # clear dead jobs and kill the running background processes
+    return nil unless usr_command.strip[...4] == 'exit'
+
+    @logger.debug("exit command")
+    # clear dead jobs and kill the running background processes
+    clear_dead_jobs
+
+    if @running_processes.length > 0
+      puts "killing #{@running_processes.length} active backgroun processes"
+      @running_processes.each do |_, _, _, wait_thr|
+        `kill -KILL #{wait_thr[:pid]}`
+        @last_exit_code = wait_thr.value.exitstatus
+      end
       clear_dead_jobs
-
-      if @running_processes.length > 0
-        puts "killing #{@running_processes.length} active backgroun processes"
-        @running_processes.each do |_, _, _, wait_thr|
-          `kill -KILL #{wait_thr[:pid]}`
-          @last_exit_code = wait_thr.value.exitstatus
-        end
-        clear_dead_jobs
-      end
-
-      exit_code = usr_command.strip[4...]
-      if exit_code
-        return usr_command.strip[4...].to_i # TODO: to move jobs exits here ?
-      else
-        return 0
-      end
-      # no: the jobs are cleared, and their exit codes are in @last_exit_code
-      #     which is not used actually!
-      #
-    else
-      return nil
     end
+
+    exit_code = usr_command.strip[4...]
+
+    return exit_code ? usr_command.strip[4...].to_i : @last_exit_code
   end
 
   def process_command usr_command, at_binding=nil
+    at_binding = @comline_binding if at_binding.nil?
+
     #
     if @remote_stdin
       @remote_stdin.write_nonblock usr_command + "\n"
@@ -627,11 +610,11 @@ class Comline
       end
     end
 
-    # eval_cmd blocks on an external command
-    # only the stream threads are slow
-    sleep 0.1
-
     if @remote_stdout
+      # eval_cmd blocks on an external command
+      # only the stream threads are slow
+      sleep 0.1
+
       #puts "reading remote streams: #{@remote_stdout.ready?.nil?}"
       #puts "reading remote streams: #{@remote_stderr.ready?.nil?}"
       #if @remote_stdout.ready?
@@ -651,12 +634,20 @@ class Comline
     end
   end
 
+  def get_input
+    if @is_pipe_input
+      STDIN.gets
+    else
+      Readline.readline(eval('"' + @prompt + '"'))
+    end
+  end
+
   def console (at_binding = nil)
     @logger.debug("launch a console")
 
-    while usr_command = Readline.readline(eval('"' + @prompt + '"'))
-      @logger.debug "got a Readline input! #{usr_command}"
-      #puts "#{@global_binding} #{@current_binding} | #{at_binding}"
+    while usr_command = get_input # Readline.readline(eval('"' + @prompt + '"'))
+      #@logger.debug "got a Readline input! #{usr_command}"
+      #puts "#{@comline_binding} #{@current_binding} | #{at_binding}"
       if usr_command.strip.empty?
         next
       end
@@ -665,31 +656,13 @@ class Comline
       # or TODO: add it if it succeeded
       Readline::HISTORY.push usr_command
 
-      if check_exit usr_command
-        break
-      end
+      break if check_exit usr_command
+
       process_command usr_command, at_binding
     end
 
-    # jobs exits
+    @last_exit_code
   end
-
-  def console_stdin at_binding = nil
-    @logger.debug("launch a console_stdin")
-
-    while usr_command = STDIN.gets
-      puts "got console_stdin input #{usr_command}"
-      if usr_command.strip.empty?
-        next
-      end
-
-      if check_exit usr_command
-        break
-      end
-      process_command usr_command, at_binding
-    end
-  end
-
 
 #
 # an attempt at readline completion for history

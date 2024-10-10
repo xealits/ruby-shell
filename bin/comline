@@ -89,25 +89,14 @@ end
 puts "got comline name #{shell_name} -- launching new shell"
 
 # if there is a name - set up a Comline object
-new_shell = Comline.new shell_name
+new_shell = Comline.new shell_name, options[:stdin]
 new_shell.set_log_level options[:log_level]
 
 # also set the name in environment for other processes
 ENV["RBSHELL_NAME"] = shell_name
 puts "name = #{ENV["RBSHELL_NAME"]}"
 
-# let stdin mean the shell with pipe IO
-if options[:stdin]
-  exit_code = new_shell.console_stdin $global_binding
+exit_code = new_shell.console $global_binding
+exit_code ||= 0
 
-else
-  # if not stdin -- launch a shell with terminal
-  puts "got comline name #{shell_name} -- launching"
-  exit_code = new_shell.console $global_binding
-end
-
-if exit_code
-  Kernel.exit exit_code
-else
-  Kernel.exit 0
-end
+Kernel.exit exit_code

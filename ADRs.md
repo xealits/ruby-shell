@@ -41,7 +41,27 @@ If the stdout of a process is requested, it should be possible to recognise
 whether the process runs inside a terminal, and pull the stdout from the screen.
 Otherwise, the process is connected to pipes.
 
-* A comline running in `--stdin` mode might also be able to spawn a screen session?
+* Probably the important point is to not need to connect to terminal input & output.
+  I.e. the terminal must serve only as the UI. The programmable processes, with pipes,
+  should be spawned and connected as background jobs. It should also include the dependencies
+  and an FSM between processes?
+
+  The application is some kind of automation: the processes print their state updates
+  as serial protocol to stdout or something like that. I.e. the basic interface is made of
+  just pipes and some simple protocol. The point is that it's a very common infrastructure.
+
+  - How it fits to MQTT? Check NNG pattern to provide multiple-consumers subscribtions
+    to these stdout Data Points.
+  - Check out serialisation protocols. The simpler the better.
+    And make a simple test app, like barometric sensors on serial console + a protocol + a TUI ASCII typography?
+  - Check out GraphQL and API-building on top of it. It seems like the right thing,
+    but without the commit time series and the config "branches".
+
+* At the same time, it may make sense to be able to launch comline as `--stdin`?
+  Or maybe with a proper input protocol? This is like the `cockpit` for `systemd` thing.
+  You don't want to re-make an SSH connection on each command. It's better to have
+  a bunch of connections open, showing some heartbeat, with a possibility to browse processes.
+  A comline running in `--stdin` mode might also be able to spawn a screen session?
 
 How it will work with launching remote processes?
 

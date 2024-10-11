@@ -112,7 +112,7 @@ class Comline
 
     @prompt = '#{@last_exit_code.to_s.rjust 3} #{@name.ljust 8} stdin> '
     @last_exit_code = 0
-    @running_processes = []
+    @running_processes = {} # a hash of process name to the popen3 objects
 
     @command_history = []
     @command_history_max = 50 # TODO: they might have a data structure for this in Ruby - or just make a class
@@ -146,6 +146,7 @@ class Comline
     @check_history = true
     # my completion proc:
     # TODO: it should be able to return to the previous completion
+    # TODO: also complete on the running process names - to quickly pass their stdin and out etc
     Readline.completion_proc = proc do |cur_word|
       # def completion_proc cur_word
       cur_line = Readline.line_buffer
@@ -188,7 +189,7 @@ class Comline
 
   def jobs_exit_code
     exit_code = nil
-    @running_processes.each {|p| exit_code = p[3].value.exitstatus}
+    @running_processes.each {|name, p| exit_code = p[3].value.exitstatus}
     return exit_code
   end
 
@@ -198,9 +199,10 @@ class Comline
 
     if proc_num > @running_processes.length
       puts "proc_num > $running_processes.length"
+      return nil
     end
 
-    return @running_processes[proc_num][3][:pid]
+    return @running_processes.values[proc_num][3][:pid]
   end
 
   def proc_stdin proc_id
@@ -293,7 +295,7 @@ class Comline
 
     n_jobs = @running_processes.length
 
-    @running_processes.reject! do |p|
+    @running_processes.reject! do |name, p|
       isdead = !p[3].alive?
       @last_exit_code = p[3].value.exitstatus if isdead
       isdead # the return value of the block, that makes reject! reject
@@ -315,12 +317,18 @@ class Comline
     command.map! do |e|
       if e[0] == '%' and is_int?(e[1..])
         i = Integer(e[1..])
-        if @running_processes[i]
-          @running_processes[i][3][:pid]
+        proc_by_index = @running_processes.values[i]
+        if proc_by_index
+          proc_by_index[3][:pid]
         else
           STDERR.puts "no job process is running at index #{i}"
           return
         end
+
+      # if it is a process name -- substitute with PID
+      elsif @running_processes.key? e
+        @running_processes[e][3][:pid]
+
       else
         # if it is not a %i -- just leave it as is
         e
@@ -334,6 +342,11 @@ class Comline
     @last_exit_code = wait_thr.value.exitstatus
     puts "#{stdout.read} #{stderr.read}"
     return @last_exit_code
+  end
+
+  def generate_name usr_command
+    # TODO: use the usr_command to derive something more meaningful?
+    return "proc" + rand(1000).to_s
   end
 
   def eval_cmd usr_command, at_binding
@@ -383,19 +396,22 @@ class Comline
           return
         end
 
+        proc_by_index = @running_processes.values[proc_num]
         field = command[2]
         if field == 'stdout'
           puts "proc #{proc_num} stdout:"
-          puts @running_processes[proc_num][1].read
+          puts proc_by_index[1].read
 
         elsif field == 'stderr'
           puts "proc #{proc_num} stdout:"
-          @running_processes[proc_num][2].read
+          proc_by_index[2].read
 
         elsif field == 'connect'
           # TODO: not sure if the following works
           #       it does not work with vim or nvim
-          wait_thr = @running_processes[proc_num][3]
+          #       but it can be useful with normal processes:
+          #       Comline for stdin etc
+          wait_thr = proc_by_index[3]
           pid = wait_thr[:pid]
           puts "connecting STDIN and STDOUT to proc #{proc_num} PID=#{pid}..."
           process_stdin = File.open("/proc/#{pid}/fd/0", "r+")
@@ -406,18 +422,18 @@ class Comline
           @last_exit_code = wait_thr.value.exitstatus
         end
 
+      elsif command[1] == 'kill' # handle %1 sort of ID
+        return shell_kill_cmd command[1..]
+
       else # print exiting processes/jobs
-        @running_processes.each_with_index do |p, i|
+        @running_processes.each_with_index do |(name, p), i|
           pid = p[3][:pid]
           #cmd = `cat /proc/#{pid}/comm`
           cmd = p[4]
-          puts "#{i}: #{pid} #{cmd} #{p[3]}"
+          puts "#{i}: #{name} #{pid} #{cmd} #{p[3]}"
         end
       end
       return
-
-    elsif command[0] == 'kill' # handle %1 sort of ID
-      return shell_kill_cmd command
     end
 
     # the shell command
@@ -454,7 +470,8 @@ class Comline
 
       if spawn_process
 
-        stdin, stdout, stderr, wait_thr = Open3.popen3(usr_command)
+        proc_name = @name + ".#{generate_name usr_command}"
+        stdin, stdout, stderr, wait_thr = Open3.popen3("RBSHELL_NAME=#{proc_name} " + usr_command)
         puts "stdin.tty? #{stdin.tty?}"
         # TODO this won't work for vim
         #      I guess I need a thread for spawned background processes.
@@ -466,7 +483,7 @@ class Comline
         #      Then you need some signal to disconnect from the process file descriptors.
 
         # let's save it as a running proc
-        @running_processes.append [stdin, stdout, stderr, wait_thr, usr_command]
+        @running_processes[proc_name] = [stdin, stdout, stderr, wait_thr, usr_command]
 
         puts "launched a process #{wait_thr[:pid]}"
         # TODO: what if the process quickly exits, like stdbuf -o0 sh ?
@@ -580,7 +597,7 @@ class Comline
 
     if @running_processes.length > 0
       puts "killing #{@running_processes.length} active backgroun processes"
-      @running_processes.each do |_, _, _, wait_thr|
+      @running_processes.each do |(name, (_, _, _, wait_thr))|
         `kill -KILL #{wait_thr[:pid]}`
         @last_exit_code = wait_thr.value.exitstatus
       end

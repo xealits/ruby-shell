@@ -1,3 +1,53 @@
+# The shell features
+
+The main bit is to have a decent language to fall back on, when it is needed.
+Ruby is perfect for that: it is concise, powerful, with a bunch of shell features
+like the support for regexps. Some features to enable Ruby more:
+
+* Seamlessly passing pipes between shell and Ruby: create a named pipe in Ruby and
+  return its filename, refer to the standard streams of a process via `/proc/`.
+  Also, some lookup or completion into the internal state of `Comline` object
+  that is available for the evaluation of user commands.
+
+* Multi-line command edditing.
+
+"Discoverability" of the interface: something to guide the user to what
+can be done with the interface. Although, I am not sure what's possible here.
+
+Handy features to manipulate shell input and output: split windows for input and output,
+handy way to copy bits of output into the input (Vim keys?), send the input
+to multiple shells (and eval `#{}` in the target shells). Also, it's nice to have
+the shells run inside `screen` by default everywhere, like with `ruby-screen` Gem.
+
+Few bits to manage processes. Not sure if it is worth to require a whole Foreman or God.
+But it's handy to have some "domain names" for the processes, and be able to get their
+streams and open sockets easily. In principle, this stuff leads to systemd-like,
+and Foreman- or God-like features, with dependencies and FSM between commands and processes.
+Not sure if that's worth to integrate. It would be massively better if the shell
+seamlessly ran these programs on all the hosts on their own. On the other hand,
+it typically gets confusing when things aren't integrated, especially if it is
+similar things.
+
+The point of so much attention on support of pipes is not to push any text into
+them. What's really needed is some serialisation protocol for arbitrary messages
+that are sent between processes. I.e. you have: (C/C++) ABI, bindings (Python, Ruby),
+serial protocol (JSON, msgpack, etc), text or graphic user interface. And you can
+integrate programs at any of these interfaces. Then, it's worth to have examples:
+having an ABI, automatically bind it to Ruby, and create a serial protocl out of
+its signature, then create an `optparse` commandline UI, and a GUI, maybe a web GUI.
+And it's worth to have some handy utilities: small NNG programs to turn a pipe into
+different patterns of sockets (pub-sub etc), logger for a pipe, an influxdb data
+source, also pipe the data into a `curses_menu` that sorts through the data points.
+Also, in principle, at the level of ABI or Python/Ruby bindings, you can create
+and OPC server. I.e. from the signatures of the bindings, plus some logic and FSM
+code, you can generate a boilerplate for a server. It is a more complex case, but
+similar to generating a command line utility.
+
+And I also want to integrate the `uart` Gem, to work with serial interfaces.
+It's just for hoppy embedded projects.
+
+
+
 # Terminals and pipes
 
 There is a UI, i.e. the terminal, and the pipes, the standard streams of a program.
@@ -52,7 +102,8 @@ Otherwise, the process is connected to pipes.
   as serial protocol to stdout or something like that. I.e. the basic interface is made of
   just pipes and some simple protocol. The point is that it's a very common infrastructure.
 
-  - How it fits into MQTT?
+  - How it fits into MQTT? The shell is just a few small useful mechanisms to launch and manage processes.
+    Those processes can talk over MQTT or just sockets in any way they want.
   - Check NNG pattern to provide multiple-consumers subscribtions to these stdout Data Points.
     Pipes have limited capacity. So, if real logging is needed, it means something more serious.
     Check Ruby influx gems for a basic logger.
@@ -140,4 +191,13 @@ Maintain processes under a running Ruby comline?
 Maight be the way to go: the same commands are used interactively and remotely.
 How do you interact nicely with a comline that runs in a screen terminal?
 The screen `stuff` and `hardcopy` commands are not that great really.
+
+
+
+# Multi-line input & probably parsing
+
+How [`fish`](https://fishshell.com/) does it?
+Can it be done with just [`reline`](https://github.com/ruby/reline)?
+To support quotation marks and `#{}`, it needs to parse the text.
+Then you can program [`readline`](https://stackoverflow.com/questions/161495/is-there-a-nice-way-of-handling-multi-line-input-with-gnu-readline) to react to the keys in a custom way.
 
